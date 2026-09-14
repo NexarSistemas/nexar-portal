@@ -55,3 +55,20 @@ select not exists (
                        'licencias_admin_total', 'licencias_select_vendedor_propietario',
                        'comisiones_admin_total', 'comisiones_select_vendedor_propietario')
 ) as legacy_no_recibe_policies_de_m06;
+
+select policyname, cmd, roles,
+  position('es_admin' in coalesce(qual, '')) > 0 as usa_es_admin
+from pg_policies
+where schemaname = 'public'
+  and tablename = 'solicitudes_upgrade'
+  and policyname = 'solicitudes_upgrade_admin_select';
+
+select not exists (
+  select 1
+  from pg_policies
+  where schemaname = 'public'
+    and tablename = 'solicitudes_upgrade'
+    and cmd in ('SELECT', 'ALL')
+    and 'authenticated' = any(roles)
+    and policyname <> 'solicitudes_upgrade_admin_select'
+) as no_queda_lectura_general_authenticated_en_solicitudes_upgrade;

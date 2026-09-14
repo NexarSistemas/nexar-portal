@@ -21,7 +21,7 @@ select conrelid::regclass as tabla, conname, confrelid::regclass as tabla_refere
 from pg_constraint
 where conname in ('pagos_venta_id_fkey', 'licencias_cliente_id_fkey', 'licencias_venta_id_fkey',
                   'licencias_venta_item_id_fkey', 'licencias_venta_item_venta_fkey',
-                  'licencias_producto_id_fkey', 'licencias_plan_id_fkey',
+                  'licencias_producto_id_fkey', 'licencias_plan_id_fkey', 'licencias_plan_producto_fkey',
                   'comisiones_vendedor_id_fkey', 'comisiones_venta_id_fkey',
                   'comisiones_pago_id_fkey', 'comisiones_pago_venta_fkey')
 order by conrelid::regclass::text, conname;
@@ -66,6 +66,27 @@ select
       and c.conkey = array[a.comision_pago_id, a.comision_venta_id]::smallint[]
       and c.confkey = array[a.pago_id, a.pago_venta_id]::smallint[]
   ) as pago_corresponde_a_venta_de_comision;
+
+select
+  exists (
+    select 1 from pg_constraint
+    where conname = 'licencias_plan_requiere_producto_check'
+      and conrelid = 'public.licencias'::regclass and contype = 'c'
+  ) as plan_requiere_producto,
+  exists (
+    select 1 from pg_constraint c
+    where c.conname = 'licencias_plan_producto_fkey'
+      and c.conrelid = 'public.licencias'::regclass
+      and c.confrelid = 'public.planes'::regclass and c.contype = 'f'
+      and c.conkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'plan_id' and not attisdropped),
+        (select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'producto_id' and not attisdropped)
+      ]::smallint[]
+      and c.confkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.planes'::regclass and attname = 'id' and not attisdropped),
+        (select attnum from pg_attribute where attrelid = 'public.planes'::regclass and attname = 'producto_id' and not attisdropped)
+      ]::smallint[]
+  ) as plan_pertenece_al_producto;
 
 select exists (
   select 1 from pg_index

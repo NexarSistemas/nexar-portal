@@ -16,7 +16,7 @@ proyecto enlazado ni comandos de despliegue de base de datos.
 | M01 | Crea clientes, productos, planes y precios versionados. | Aditiva |
 | M02 | Crea ventas y venta_items con snapshot historico. | Aditiva |
 | M03 | Agrega FK nullable a pagos, licencias y comisiones. | Compatible |
-| M04 | Sanea solo datos de prueba despues de relevar el schema. | Destructiva y bloqueada |
+| M04 | Sanea datos de prueba y crea catalogo inicial desde `precios_planes`. | Destructiva y gated |
 | M05 | Crea perfiles y helpers para Supabase Auth. | Aditiva |
 | M06 | Declara grants, RLS y policies futuras. | Requiere prueba funcional |
 | M07 | Retira Auth legacy solo despues del gate operativo. | Parcialmente destructiva y bloqueada |
@@ -26,4 +26,6 @@ del Portal Vendedor siguen coexistiendo. No hay migracion de passwords ni
 provision de usuarios Auth en este baseline.
 
 La descripcion completa del contrato, riesgos, reversibilidad y gates se
-encuentra en [docs/database/baseline.md](../docs/database/baseline.md).
+encuentra en [docs/database/baseline.md](../docs/database/baseline.md). El
+snapshot legacy sanitizado esta en
+[docs/database/legacy-schema-relevamiento.md](../docs/database/legacy-schema-relevamiento.md).
