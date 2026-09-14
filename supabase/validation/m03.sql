@@ -22,7 +22,7 @@ from pg_constraint
 where conname in ('pagos_venta_id_fkey', 'licencias_cliente_id_fkey', 'licencias_venta_id_fkey',
                   'licencias_venta_item_id_fkey', 'licencias_producto_id_fkey', 'licencias_plan_id_fkey',
                   'comisiones_vendedor_id_fkey', 'comisiones_venta_id_fkey', 'comisiones_pago_id_fkey')
-order by tabla::text, conname;
+order by conrelid::regclass::text, conname;
 
 select exists (
   select 1 from pg_index

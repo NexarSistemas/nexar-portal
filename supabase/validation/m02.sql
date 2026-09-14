@@ -30,11 +30,47 @@ select
   exists (select 1 from pg_constraint where conrelid = 'public.ventas'::regclass
     and contype = 'c' and pg_get_constraintdef(oid) like '%estado%') as venta_estado_tiene_check;
 
-select not exists (
-  select 1 from pg_constraint
-  where conrelid = 'public.venta_items'::regclass and contype = 'c'
-    and pg_get_constraintdef(oid) like '%producto_id%'
-    and pg_get_constraintdef(oid) like '%plan_id%'
-    and pg_get_constraintdef(oid) like '%precio_id%'
-    and pg_get_constraintdef(oid) like '%IS NULL%'
-) as plan_y_precio_no_estan_forzados_en_bloque;
+with atributos as (
+  select
+    (select attnum from pg_attribute where attrelid = 'public.venta_items'::regclass and attname = 'plan_id' and not attisdropped) as item_plan_id,
+    (select attnum from pg_attribute where attrelid = 'public.venta_items'::regclass and attname = 'producto_id' and not attisdropped) as item_producto_id,
+    (select attnum from pg_attribute where attrelid = 'public.venta_items'::regclass and attname = 'precio_id' and not attisdropped) as item_precio_id,
+    (select attnum from pg_attribute where attrelid = 'public.planes'::regclass and attname = 'id' and not attisdropped) as plan_id,
+    (select attnum from pg_attribute where attrelid = 'public.planes'::regclass and attname = 'producto_id' and not attisdropped) as plan_producto_id,
+    (select attnum from pg_attribute where attrelid = 'public.precios'::regclass and attname = 'id' and not attisdropped) as precio_id,
+    (select attnum from pg_attribute where attrelid = 'public.precios'::regclass and attname = 'plan_id' and not attisdropped) as precio_plan_id
+)
+select
+  exists (
+    select 1 from pg_constraint c cross join atributos a
+    where c.conname = 'planes_id_producto_id_key'
+      and c.conrelid = 'public.planes'::regclass and c.contype = 'u'
+      and c.conkey = array[a.plan_id, a.plan_producto_id]::smallint[]
+  ) as planes_tiene_unicidad_para_fk_compuesta,
+  exists (
+    select 1 from pg_constraint c cross join atributos a
+    where c.conname = 'precios_id_plan_id_key'
+      and c.conrelid = 'public.precios'::regclass and c.contype = 'u'
+      and c.conkey = array[a.precio_id, a.precio_plan_id]::smallint[]
+  ) as precios_tiene_unicidad_para_fk_compuesta,
+  exists (
+    select 1 from pg_constraint c cross join atributos a
+    where c.conname = 'venta_items_plan_producto_fkey'
+      and c.conrelid = 'public.venta_items'::regclass and c.confrelid = 'public.planes'::regclass
+      and c.contype = 'f'
+      and c.conkey = array[a.item_plan_id, a.item_producto_id]::smallint[]
+      and c.confkey = array[a.plan_id, a.plan_producto_id]::smallint[]
+  ) as plan_pertenece_al_producto,
+  exists (
+    select 1 from pg_constraint c cross join atributos a
+    where c.conname = 'venta_items_precio_plan_fkey'
+      and c.conrelid = 'public.venta_items'::regclass and c.confrelid = 'public.precios'::regclass
+      and c.contype = 'f'
+      and c.conkey = array[a.item_precio_id, a.item_plan_id]::smallint[]
+      and c.confkey = array[a.precio_id, a.precio_plan_id]::smallint[]
+  ) as precio_pertenece_al_plan,
+  exists (
+    select 1 from pg_constraint
+    where conname = 'venta_items_precio_requiere_plan_check'
+      and conrelid = 'public.venta_items'::regclass and contype = 'c'
+  ) as precio_requiere_plan;

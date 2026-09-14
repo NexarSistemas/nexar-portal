@@ -22,15 +22,23 @@ create table public.venta_items (
   id uuid primary key default gen_random_uuid(),
   venta_id uuid not null references public.ventas (id) on delete restrict,
   producto_id uuid not null references public.productos (id) on delete restrict,
-  plan_id uuid references public.planes (id) on delete restrict,
-  precio_id uuid references public.precios (id) on delete restrict,
+  plan_id uuid,
+  precio_id uuid,
   descripcion text not null check (btrim(descripcion) <> ''),
   producto_nombre text not null check (btrim(producto_nombre) <> ''),
   plan_nombre text,
   cantidad numeric(12,3) not null check (cantidad > 0),
   precio_unitario numeric(14,2) not null check (precio_unitario >= 0),
   importe_total numeric(14,2) not null check (importe_total >= 0),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  constraint venta_items_plan_producto_fkey
+    foreign key (plan_id, producto_id)
+    references public.planes (id, producto_id) on delete restrict,
+  constraint venta_items_precio_plan_fkey
+    foreign key (precio_id, plan_id)
+    references public.precios (id, plan_id) on delete restrict,
+  constraint venta_items_precio_requiere_plan_check
+    check (precio_id is null or plan_id is not null)
 );
 create index venta_items_venta_id_idx on public.venta_items (venta_id);
 create index venta_items_producto_id_idx on public.venta_items (producto_id) where producto_id is not null;

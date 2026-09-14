@@ -39,7 +39,8 @@ create table public.planes (
   activo boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (producto_id, codigo)
+  unique (producto_id, codigo),
+  constraint planes_id_producto_id_key unique (id, producto_id)
 );
 create index planes_producto_id_idx on public.planes (producto_id);
 
@@ -54,7 +55,8 @@ create table public.precios (
   vigente_hasta timestamptz,
   created_at timestamptz not null default now(),
   check (vigente_hasta is null or vigente_hasta > vigente_desde),
-  unique (plan_id, vigente_desde)
+  unique (plan_id, vigente_desde),
+  constraint precios_id_plan_id_key unique (id, plan_id)
 );
 create index precios_plan_vigencia_idx on public.precios (plan_id, vigente_desde desc);
 

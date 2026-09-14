@@ -44,55 +44,118 @@ begin
     end if;
   end loop;
 
-  if not exists (select 1 from pg_constraint where conname = 'pagos_venta_id_fkey') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'pagos_venta_id_fkey'
+      and conrelid = 'public.pagos'::regclass
+      and confrelid = 'public.ventas'::regclass
+      and conkey = array[(select attnum from pg_attribute where attrelid = 'public.pagos'::regclass and attname = 'venta_id' and not attisdropped)]::smallint[]
+      and confkey = array[(select attnum from pg_attribute where attrelid = 'public.ventas'::regclass and attname = 'id' and not attisdropped)]::smallint[]
+  ) then
     alter table public.pagos
       add constraint pagos_venta_id_fkey
       foreign key (venta_id) references public.ventas (id) on delete restrict;
   end if;
 
-  if not exists (select 1 from pg_constraint where conname = 'licencias_cliente_id_fkey') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'licencias_cliente_id_fkey'
+      and conrelid = 'public.licencias'::regclass
+      and confrelid = 'public.clientes'::regclass
+      and conkey = array[(select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'cliente_id' and not attisdropped)]::smallint[]
+      and confkey = array[(select attnum from pg_attribute where attrelid = 'public.clientes'::regclass and attname = 'id' and not attisdropped)]::smallint[]
+  ) then
     alter table public.licencias
       add constraint licencias_cliente_id_fkey
       foreign key (cliente_id) references public.clientes (id) on delete restrict;
   end if;
 
-  if not exists (select 1 from pg_constraint where conname = 'licencias_venta_id_fkey') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'licencias_venta_id_fkey'
+      and conrelid = 'public.licencias'::regclass
+      and confrelid = 'public.ventas'::regclass
+      and conkey = array[(select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'venta_id' and not attisdropped)]::smallint[]
+      and confkey = array[(select attnum from pg_attribute where attrelid = 'public.ventas'::regclass and attname = 'id' and not attisdropped)]::smallint[]
+  ) then
     alter table public.licencias
       add constraint licencias_venta_id_fkey
       foreign key (venta_id) references public.ventas (id) on delete restrict;
   end if;
 
-  if not exists (select 1 from pg_constraint where conname = 'licencias_venta_item_id_fkey') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'licencias_venta_item_id_fkey'
+      and conrelid = 'public.licencias'::regclass
+      and confrelid = 'public.venta_items'::regclass
+      and conkey = array[(select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'venta_item_id' and not attisdropped)]::smallint[]
+      and confkey = array[(select attnum from pg_attribute where attrelid = 'public.venta_items'::regclass and attname = 'id' and not attisdropped)]::smallint[]
+  ) then
     alter table public.licencias
       add constraint licencias_venta_item_id_fkey
       foreign key (venta_item_id) references public.venta_items (id) on delete restrict;
   end if;
 
-  if not exists (select 1 from pg_constraint where conname = 'licencias_producto_id_fkey') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'licencias_producto_id_fkey'
+      and conrelid = 'public.licencias'::regclass
+      and confrelid = 'public.productos'::regclass
+      and conkey = array[(select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'producto_id' and not attisdropped)]::smallint[]
+      and confkey = array[(select attnum from pg_attribute where attrelid = 'public.productos'::regclass and attname = 'id' and not attisdropped)]::smallint[]
+  ) then
     alter table public.licencias
       add constraint licencias_producto_id_fkey
       foreign key (producto_id) references public.productos (id) on delete restrict;
   end if;
 
-  if not exists (select 1 from pg_constraint where conname = 'licencias_plan_id_fkey') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'licencias_plan_id_fkey'
+      and conrelid = 'public.licencias'::regclass
+      and confrelid = 'public.planes'::regclass
+      and conkey = array[(select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'plan_id' and not attisdropped)]::smallint[]
+      and confkey = array[(select attnum from pg_attribute where attrelid = 'public.planes'::regclass and attname = 'id' and not attisdropped)]::smallint[]
+  ) then
     alter table public.licencias
       add constraint licencias_plan_id_fkey
       foreign key (plan_id) references public.planes (id) on delete restrict;
   end if;
 
-  if not exists (select 1 from pg_constraint where conname = 'comisiones_vendedor_id_fkey') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'comisiones_vendedor_id_fkey'
+      and conrelid = 'public.comisiones'::regclass
+      and confrelid = 'public.vendedores'::regclass
+      and conkey = array[(select attnum from pg_attribute where attrelid = 'public.comisiones'::regclass and attname = 'vendedor_id' and not attisdropped)]::smallint[]
+      and confkey = array[(select attnum from pg_attribute where attrelid = 'public.vendedores'::regclass and attname = 'id' and not attisdropped)]::smallint[]
+  ) then
     alter table public.comisiones
       add constraint comisiones_vendedor_id_fkey
       foreign key (vendedor_id) references public.vendedores (id) on delete restrict;
   end if;
 
-  if not exists (select 1 from pg_constraint where conname = 'comisiones_venta_id_fkey') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'comisiones_venta_id_fkey'
+      and conrelid = 'public.comisiones'::regclass
+      and confrelid = 'public.ventas'::regclass
+      and conkey = array[(select attnum from pg_attribute where attrelid = 'public.comisiones'::regclass and attname = 'venta_id' and not attisdropped)]::smallint[]
+      and confkey = array[(select attnum from pg_attribute where attrelid = 'public.ventas'::regclass and attname = 'id' and not attisdropped)]::smallint[]
+  ) then
     alter table public.comisiones
       add constraint comisiones_venta_id_fkey
       foreign key (venta_id) references public.ventas (id) on delete restrict;
   end if;
 
-  if not exists (select 1 from pg_constraint where conname = 'comisiones_pago_id_fkey') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'comisiones_pago_id_fkey'
+      and conrelid = 'public.comisiones'::regclass
+      and confrelid = 'public.pagos'::regclass
+      and conkey = array[(select attnum from pg_attribute where attrelid = 'public.comisiones'::regclass and attname = 'pago_id' and not attisdropped)]::smallint[]
+      and confkey = array[(select attnum from pg_attribute where attrelid = 'public.pagos'::regclass and attname = 'id' and not attisdropped)]::smallint[]
+  ) then
     alter table public.comisiones
       add constraint comisiones_pago_id_fkey
       foreign key (pago_id) references public.pagos (id) on delete restrict;
