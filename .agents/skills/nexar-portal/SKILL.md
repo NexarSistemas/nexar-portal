@@ -1,3 +1,8 @@
+---
+name: nexar-portal
+description: "Instrucciones operativas para trabajar en Nexar Portal. Usar para tareas de arquitectura, base de datos, seguridad, flujos comerciales, convenciones y validación del repositorio."
+---
+
 # Nexar Portal
 
 Este skill es un router operativo. El código, SQL y documentación actualmente
