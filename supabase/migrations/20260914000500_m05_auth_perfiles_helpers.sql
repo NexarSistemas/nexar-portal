@@ -3,9 +3,11 @@
 create schema if not exists app_private;
 
 create table public.perfiles (
-  id uuid primary key references auth.users (id) on delete cascade,
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  nombre text not null check (btrim(nombre) <> ''),
   rol text not null check (rol in ('admin', 'vendedor')),
   vendedor_id uuid references public.vendedores (id) on delete restrict,
+  activo boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check ((rol = 'admin' and vendedor_id is null) or rol = 'vendedor')
@@ -22,8 +24,9 @@ as $$
   select exists (
     select 1
     from public.perfiles
-    where id = (select auth.uid())
+    where user_id = (select auth.uid())
       and rol = 'admin'
+      and activo
   );
 $$;
 
@@ -36,8 +39,9 @@ set search_path = pg_catalog, public
 as $$
   select vendedor_id
   from public.perfiles
-  where id = (select auth.uid())
-    and rol = 'vendedor';
+  where user_id = (select auth.uid())
+    and rol = 'vendedor'
+    and activo;
 $$;
 
 create or replace function app_private.es_vendedor_de_venta(p_venta_id uuid)

@@ -48,6 +48,8 @@ create table public.precios (
   plan_id uuid not null references public.planes (id) on delete restrict,
   moneda text not null check (moneda ~ '^[A-Z]{3}$'),
   importe numeric(14,2) not null check (importe >= 0),
+  modalidad_cobro text not null check (btrim(modalidad_cobro) <> ''),
+  estado text not null default 'activo' check (btrim(estado) <> ''),
   vigente_desde timestamptz not null,
   vigente_hasta timestamptz,
   created_at timestamptz not null default now(),
@@ -57,4 +59,4 @@ create table public.precios (
 create index precios_plan_vigencia_idx on public.precios (plan_id, vigente_desde desc);
 
 comment on table public.precios is
-  'Precios versionados. Las ventas conservan su propio snapshot y no se reconstruyen desde esta tabla.';
+  'Precios versionados con modalidad y estado. Las ventas conservan su propio snapshot y no se reconstruyen desde esta tabla.';

@@ -59,6 +59,15 @@ y `admin_audit_log`. En particular:
 `clientes.email` no es unico y el baseline no deduplica ni fusiona clientes por
 email. Cada `venta_item` conserva nombre, cantidad, precio unitario e importe
 históricos, por lo que un cambio en `precios` no altera ventas anteriores.
+`precios` incluye modalidad de cobro, estado y vigencia; `ventas` incluye moneda
+y estado. Los `venta_items` requieren producto y descripcion, mientras que plan
+y precio de catalogo de origen permanecen opcionales.
+
+M03 agrega solamente columnas nullable y relaciones canonicas nuevas. En pagos
+cubre venta, proveedor/origen, estado del proveedor, decision administrativa e
+idempotencia/correlacion; en licencias, cliente, venta, item, producto y plan;
+y en comisiones, vendedor, venta, pago e importe historico. No presupone ni
+altera columnas legacy que el repositorio no demuestra.
 
 ## M04: saneamiento condicionado
 
@@ -78,15 +87,16 @@ inferidos: faltan sus valores aprobados.
 
 ## M06 y M07: seguridad y retirada legacy
 
-M06 habilita RLS en las tablas canonicas y en las tablas legacy que reciben
-relaciones canonicas (`pagos`, `licencias`, `comisiones`). Las policies separan
-administradores de vendedores por `perfiles.rol` y `perfiles.vendedor_id`;
-autorizan ownership mediante FK, nunca por frontend, secretos compartidos ni
-metadata editable.
+M06 habilita RLS solo en las tablas nuevas canonicas. Las policies separan
+administradores de vendedores por `perfiles.rol`, `perfiles.activo` y
+`perfiles.vendedor_id`; autorizan ownership mediante FK, nunca por frontend,
+secretos compartidos ni metadata editable.
 
-No se habilita RLS en los demás objetos legacy sin inventario de consumidores.
-La prueba funcional debe comprobar tanto las operaciones administrativas como
-las lecturas de cada vendedor antes de considerar M06 operativa.
+El hardening de `pagos`, `licencias` y `comisiones` queda condicionado: no se
+habilita ni modifica RLS, policies o grants legacy sin inventario de consumidores
+y policies existentes. La prueba funcional debe comprobar tanto las operaciones
+administrativas como las lecturas de cada vendedor antes de considerar M06
+operativa.
 
 M07 requiere provisionar manualmente el Auth de RONA596, vincular su perfil,
 validar el flujo y RLS, y demostrar que ya no hay consumidores de sesiones,
