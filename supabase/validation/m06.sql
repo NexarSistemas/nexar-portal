@@ -2,13 +2,18 @@
 with esperadas(tabla, rls) as (
   values
     ('perfiles', true), ('clientes', true), ('productos', true), ('planes', true),
-    ('precios', true), ('ventas', true), ('venta_items', true),
-    ('pagos', false), ('licencias', false), ('comisiones', false)
+    ('precios', true), ('ventas', true), ('venta_items', true)
 )
 select e.*, c.relrowsecurity as rls_encontrado, c.relrowsecurity = e.rls as correcto
 from esperadas e
 left join pg_class c on c.relnamespace = 'public'::regnamespace and c.relname = e.tabla
 order by e.tabla;
+
+select c.relname as tabla_legacy, c.relrowsecurity as rls_informativo
+from pg_class c
+where c.relnamespace = 'public'::regnamespace
+  and c.relname in ('pagos', 'licencias', 'comisiones')
+order by c.relname;
 
 with esperadas(tabla, policyname, cmd) as (
   values

@@ -98,6 +98,26 @@ begin
 
   if not exists (
     select 1 from pg_constraint
+    where conname = 'licencias_venta_item_venta_fkey'
+      and conrelid = 'public.licencias'::regclass
+      and confrelid = 'public.venta_items'::regclass
+      and conkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'venta_item_id' and not attisdropped),
+        (select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'venta_id' and not attisdropped)
+      ]::smallint[]
+      and confkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.venta_items'::regclass and attname = 'id' and not attisdropped),
+        (select attnum from pg_attribute where attrelid = 'public.venta_items'::regclass and attname = 'venta_id' and not attisdropped)
+      ]::smallint[]
+  ) then
+    alter table public.licencias
+      add constraint licencias_venta_item_venta_fkey
+      foreign key (venta_item_id, venta_id)
+      references public.venta_items (id, venta_id) on delete restrict;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
     where conname = 'licencias_producto_id_fkey'
       and conrelid = 'public.licencias'::regclass
       and confrelid = 'public.productos'::regclass
@@ -150,6 +170,31 @@ begin
 
   if not exists (
     select 1 from pg_constraint
+    where conname = 'pagos_id_venta_id_key'
+      and conrelid = 'public.pagos'::regclass
+      and contype = 'u'
+      and conkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.pagos'::regclass and attname = 'id' and not attisdropped),
+        (select attnum from pg_attribute where attrelid = 'public.pagos'::regclass and attname = 'venta_id' and not attisdropped)
+      ]::smallint[]
+  ) then
+    if exists (
+      select 1 from public.pagos
+      where venta_id is not null
+      group by id, venta_id
+      having count(*) > 1
+    ) then
+      raise exception using
+        message = 'M03 no puede crear pagos_id_venta_id_key por pares id/venta_id duplicados.',
+        hint = 'Releve y resuelva los duplicados legacy antes de ejecutar la relacion compuesta de comisiones.';
+    end if;
+
+    alter table public.pagos
+      add constraint pagos_id_venta_id_key unique (id, venta_id);
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
     where conname = 'comisiones_pago_id_fkey'
       and conrelid = 'public.comisiones'::regclass
       and confrelid = 'public.pagos'::regclass
@@ -159,6 +204,26 @@ begin
     alter table public.comisiones
       add constraint comisiones_pago_id_fkey
       foreign key (pago_id) references public.pagos (id) on delete restrict;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'comisiones_pago_venta_fkey'
+      and conrelid = 'public.comisiones'::regclass
+      and confrelid = 'public.pagos'::regclass
+      and conkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.comisiones'::regclass and attname = 'pago_id' and not attisdropped),
+        (select attnum from pg_attribute where attrelid = 'public.comisiones'::regclass and attname = 'venta_id' and not attisdropped)
+      ]::smallint[]
+      and confkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.pagos'::regclass and attname = 'id' and not attisdropped),
+        (select attnum from pg_attribute where attrelid = 'public.pagos'::regclass and attname = 'venta_id' and not attisdropped)
+      ]::smallint[]
+  ) then
+    alter table public.comisiones
+      add constraint comisiones_pago_venta_fkey
+      foreign key (pago_id, venta_id)
+      references public.pagos (id, venta_id) on delete restrict;
   end if;
 end
 $$;

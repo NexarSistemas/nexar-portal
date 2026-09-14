@@ -31,6 +31,7 @@ create table public.venta_items (
   precio_unitario numeric(14,2) not null check (precio_unitario >= 0),
   importe_total numeric(14,2) not null check (importe_total >= 0),
   created_at timestamptz not null default now(),
+  constraint venta_items_id_venta_id_key unique (id, venta_id),
   constraint venta_items_plan_producto_fkey
     foreign key (plan_id, producto_id)
     references public.planes (id, producto_id) on delete restrict,
