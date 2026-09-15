@@ -59,6 +59,37 @@ begin
 
   if not exists (
     select 1 from pg_constraint
+    where conname = 'licencias_plan_requiere_producto_check'
+      and conrelid = 'public.licencias'::regclass
+      and contype = 'c'
+  ) then
+    alter table public.licencias
+      add constraint licencias_plan_requiere_producto_check
+      check (plan_id is null or producto_id is not null);
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'licencias_plan_producto_fkey'
+      and conrelid = 'public.licencias'::regclass
+      and confrelid = 'public.planes'::regclass
+      and conkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'plan_id' and not attisdropped),
+        (select attnum from pg_attribute where attrelid = 'public.licencias'::regclass and attname = 'producto_id' and not attisdropped)
+      ]::smallint[]
+      and confkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.planes'::regclass and attname = 'id' and not attisdropped),
+        (select attnum from pg_attribute where attrelid = 'public.planes'::regclass and attname = 'producto_id' and not attisdropped)
+      ]::smallint[]
+  ) then
+    alter table public.licencias
+      add constraint licencias_plan_producto_fkey
+      foreign key (plan_id, producto_id)
+      references public.planes (id, producto_id) on delete restrict;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
     where conname = 'licencias_cliente_id_fkey'
       and conrelid = 'public.licencias'::regclass
       and confrelid = 'public.clientes'::regclass

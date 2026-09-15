@@ -10,7 +10,8 @@ create table public.perfiles (
   activo boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check ((rol = 'admin' and vendedor_id is null) or rol = 'vendedor')
+  constraint perfiles_rol_vendedor_id_check
+    check ((rol = 'vendedor' and vendedor_id is not null) or rol = 'admin')
 );
 create index perfiles_vendedor_id_idx on public.perfiles (vendedor_id) where vendedor_id is not null;
 

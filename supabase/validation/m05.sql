@@ -20,6 +20,17 @@ select
   exists (select 1 from information_schema.columns where table_schema = 'public'
     and table_name = 'perfiles' and column_name = 'activo' and column_default is not null) as activo_tiene_default;
 
+select exists (
+  select 1 from pg_constraint
+  where conname = 'perfiles_rol_vendedor_id_check'
+    and conrelid = 'public.perfiles'::regclass and contype = 'c'
+) as vendedor_requiere_vendedor_id_y_admin_lo_admite_opcional;
+
+select conname, pg_get_constraintdef(oid) as definicion
+from pg_constraint
+where conname = 'perfiles_rol_vendedor_id_check'
+  and conrelid = 'public.perfiles'::regclass;
+
 select p.proname, p.prosecdef as security_definer,
   case
     when p.proname = 'es_vendedor_de_venta'

@@ -7,6 +7,11 @@ Al crear esta version no se ejecutaron migraciones, SQL, conectores ni ninguna
 operacion contra Supabase remoto. Los archivos no implican que el modelo este
 desplegado.
 
+El inventario legacy verificado y sanitizado se encuentra en
+[legacy-schema-relevamiento.md](legacy-schema-relevamiento.md). Es el snapshot
+operativo del 2026-09-14 y debe revalidarse antes de M04, M07 o cualquier otra
+operacion destructiva.
+
 La relacion comercial canonica es:
 
 ```text
@@ -71,19 +76,22 @@ altera columnas legacy que el repositorio no demuestra.
 
 ## M04: saneamiento condicionado
 
-La regla de negocio indica conservar solo la entidad maestra `RONA596` y su UUID
-existente. Sus movimientos de prueba, junto con licencias, pagos, comisiones,
-solicitudes y referidos de prueba, pueden eliminarse una vez aprobado el plan
-de saneamiento. Las secuencias deben reiniciarse solo si sus tablas quedan
-vacías.
+M04 exige `app.nexar_portal_m04_approved = 'approved'` y un preflight del
+snapshot: tablas y columnas requeridas, exactamente RONA596 y un vendedor de
+prueba, recuperaciones de password preservables, identidades verificadas y
+catalogo legacy compatible. Resuelve RONA596 mediante `codigo_vendedor`, nunca
+por UUID versionado. Si una condicion cambia, aborta antes de borrar.
 
-El checkout no contiene un dump, migraciones anteriores ni el esquema legacy;
-por ello no demuestra la columna de identidad comercial de `RONA596`, los FK de
-sus movimientos ni los nombres de tablas de solicitudes. M04 se deja bloqueada
-en vez de inventar `DELETE`, UUID o relaciones. Para completarla se requiere un
-relevamiento aprobado que defina el orden de borrado, preservacion del UUID y
-reset de las secuencias reales. Tampoco se insertan productos, planes ni precios
-inferidos: faltan sus valores aprobados.
+Con el gate y el preflight aprobados, elimina solo movimientos de prueba de
+licencias, pagos, comisiones, referidos y solicitudes, y luego el vendedor de
+prueba. No altera `admin_audit_log`, `precios_planes`, RONA596, sus sesiones o
+auth legacy, recuperaciones de password, newsletter ni suscripciones. Las
+identities se reinician solo para tablas ya vacias.
+
+El catalogo canonico inicial se deriva de `precios_planes` sin modificarla:
+crea los productos Nexar Comercio y Nexar Finanzas, usa `plan_comercial` como
+codigo de plan y conserva el historial de precios, moneda, importe, modalidad,
+estado y vigencias. Un codigo o precio legacy incompatible hace abortar M04.
 
 ## M06 y M07: seguridad y retirada legacy
 
@@ -99,10 +107,13 @@ administrativas como las lecturas de cada vendedor antes de considerar M06
 operativa.
 
 M07 requiere provisionar manualmente el Auth de RONA596, vincular su perfil,
-validar el flujo y RLS, y demostrar que ya no hay consumidores de sesiones,
-passwords, RPC ni policies legacy. Solo entonces puede reemplazarse su guard por
-el DDL de retiro revisado. El baseline no elimina esas estructuras de manera
-anticipada.
+validar el flujo y RLS, migrar Portal Vendedor y Nexar Admin, revalidar el
+inventario externo y aprobar expresamente el retiro. Mientras existan esos
+consumidores, el guard aborta de forma intencional. El inventario concreto de
+retiro incluye `portal_dashboard_vendedor(text)`, policies `portal_secret_*`,
+sesiones, recuperacion propia y las columnas `password_hash`,
+`password_change_required` y `ultimo_login`; `vendedores.es_admin` se conserva
+por ahora. El baseline no elimina esas estructuras de manera anticipada.
 
 ## Validacion y reversibilidad
 

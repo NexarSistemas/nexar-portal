@@ -4,6 +4,9 @@ El estado documentado de M00–M07 está en el
 [baseline de datos](../../../docs/database/baseline.md); las migraciones y sus
 validaciones reales están en `supabase/migrations/` y `supabase/validation/`.
 Son artefactos versionados y no demuestran despliegue remoto.
+El [relevamiento legacy sanitizado](../../../docs/database/legacy-schema-relevamiento.md)
+es la fuente operativa del snapshot 2026-09-14; debe revalidarse antes de M04,
+M07 o cualquier operacion destructiva.
 
 La relación canónica es `CLIENTE -> VENTA -> VENTA_ITEM -> PAGO ->
 CUMPLIMIENTO/LICENCIA -> COMISION`. Las relaciones conocidas usan IDs y FK, no
