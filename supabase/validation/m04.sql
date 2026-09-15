@@ -1,4 +1,6 @@
--- Solo lectura: preflight y resultado esperado de M04.
+-- Solo lectura: preflight y resultado esperado de M04. La migracion adquiere
+-- SHARE locks, en orden fijo, despues de su gate y antes de estas lecturas; la
+-- validacion no toma locks ni realiza operaciones destructivas.
 select current_setting('app.nexar_portal_m04_approved', true) as aprobacion_m04;
 
 select codigo_vendedor, count(*) as cantidad

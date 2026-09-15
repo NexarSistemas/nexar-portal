@@ -16,6 +16,26 @@ begin
       hint = 'Tras aprobar el plan de saneamiento, ejecute en una sesion controlada: SET app.nexar_portal_m04_approved = ''approved''.';
   end if;
 
+  -- SHARE es el modo minimo que entra en conflicto con ROW EXCLUSIVE de DML
+  -- normal y permite lecturas concurrentes. El orden fijo evita invertir locks
+  -- entre futuras ejecuciones de este saneamiento.
+  lock table public.vendedores in share mode;
+  lock table public.licencias in share mode;
+  lock table public.pagos in share mode;
+  lock table public.comisiones in share mode;
+  lock table public.referidos in share mode;
+  lock table public.portal_vendedor_sessions in share mode;
+  lock table public.portal_password_recovery_requests in share mode;
+  lock table public.solicitudes_demo in share mode;
+  lock table public.solicitudes_licencia in share mode;
+  lock table public.solicitudes_soporte in share mode;
+  lock table public.solicitudes_upgrade in share mode;
+  lock table public.solicitudes_vendedores in share mode;
+  lock table public.precios_planes in share mode;
+  lock table public.productos in share mode;
+  lock table public.planes in share mode;
+  lock table public.precios in share mode;
+
   -- Preflight del snapshot 2026-09-14: cualquier cambio material exige relevar
   -- nuevamente antes de borrar datos.
   foreach tabla in array array[

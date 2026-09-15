@@ -58,19 +58,28 @@ do $$
 declare
   policy_legacy record;
 begin
-  for policy_legacy in
-    select policyname
-    from pg_policies
-    where schemaname = 'public'
-      and tablename = 'solicitudes_upgrade'
-      and cmd in ('SELECT', 'ALL')
-      and 'authenticated' = any(roles)
-  loop
-    execute format('drop policy %I on public.solicitudes_upgrade', policy_legacy.policyname);
-  end loop;
+  select policyname, cmd, roles, permissive, qual
+  into policy_legacy
+  from pg_policies
+  where schemaname = 'public'
+    and tablename = 'solicitudes_upgrade'
+    and policyname = 'allow admin read';
+
+  if not found
+    or policy_legacy.cmd <> 'SELECT'
+    or cardinality(policy_legacy.roles) <> 1
+    or policy_legacy.roles[1] <> 'authenticated'::name
+    or policy_legacy.permissive <> 'PERMISSIVE'
+    or regexp_replace(coalesce(policy_legacy.qual, ''), '[[:space:]()]', '', 'g') <> 'true'
+  then
+    raise exception using
+      message = 'M06 requiere la policy legacy "allow admin read" sin cambios materiales.',
+      hint = 'Releve nuevamente public.solicitudes_upgrade antes de modificar sus policies.';
+  end if;
 end
 $$;
 
+drop policy "allow admin read" on public.solicitudes_upgrade;
 drop policy if exists solicitudes_upgrade_admin_select on public.solicitudes_upgrade;
 create policy solicitudes_upgrade_admin_select on public.solicitudes_upgrade for select to authenticated
   using ((select app_private.es_admin()));

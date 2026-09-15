@@ -56,19 +56,37 @@ select not exists (
                        'comisiones_admin_total', 'comisiones_select_vendedor_propietario')
 ) as legacy_no_recibe_policies_de_m06;
 
-select policyname, cmd, roles,
+select not exists (
+  select 1 from pg_policies
+  where schemaname = 'public'
+    and tablename = 'solicitudes_upgrade'
+    and policyname = 'allow admin read'
+) as allow_admin_read_legacy_retirada;
+
+select policyname, cmd, roles, permissive,
   position('es_admin' in coalesce(qual, '')) > 0 as usa_es_admin
 from pg_policies
 where schemaname = 'public'
   and tablename = 'solicitudes_upgrade'
   and policyname = 'solicitudes_upgrade_admin_select';
 
-select not exists (
+select exists (
   select 1
   from pg_policies
   where schemaname = 'public'
     and tablename = 'solicitudes_upgrade'
-    and cmd in ('SELECT', 'ALL')
-    and 'authenticated' = any(roles)
-    and policyname <> 'solicitudes_upgrade_admin_select'
-) as no_queda_lectura_general_authenticated_en_solicitudes_upgrade;
+    and policyname = 'solicitudes_upgrade_admin_select'
+    and cmd = 'SELECT'
+    and cardinality(roles) = 1
+    and roles[1] = 'authenticated'::name
+    and position('es_admin' in coalesce(qual, '')) > 0
+) as lectura_administrativa_authenticated_configurada;
+
+select exists (
+  select 1
+  from pg_policies
+  where schemaname = 'public'
+    and tablename = 'solicitudes_upgrade'
+    and cmd = 'INSERT'
+    and 'anon' = any(roles)
+) as insercion_anon_legacy_preservada;
