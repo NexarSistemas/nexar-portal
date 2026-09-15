@@ -35,18 +35,24 @@ order by tabla, policyname;
 
 with tablas(tabla) as (
   values ('perfiles'), ('clientes'), ('productos'), ('planes'), ('precios'), ('ventas'), ('venta_items')
-), esperados as (
-  select tabla, privilegio
+), esperados(tabla, grantee, privilegio) as (
+  select tabla, 'authenticated'::name, privilegio
   from tablas cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) p(privilegio)
 ), actuales as (
-  select table_name as tabla, privilege_type as privilegio
-  from information_schema.role_table_grants
-  where table_schema = 'public' and grantee = 'authenticated'
+  select c.relname as tabla, r.rolname::name as grantee,
+    upper(a.privilege_type)::text as privilegio
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+  cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+  join pg_roles r on r.oid = a.grantee
+  where n.nspname = 'public'
+    and c.relname in (select tabla from tablas)
+    and r.rolname in ('anon', 'authenticated')
 )
 select 'faltante' as diferencia, * from (select * from esperados except select * from actuales) d
 union all
-select 'inesperado', * from (select * from actuales where tabla in (select tabla from tablas) except select * from esperados) d
-order by tabla, privilegio;
+select 'inesperado', * from (select * from actuales except select * from esperados) d
+order by tabla, grantee, privilegio;
 
 select not exists (
   select 1 from pg_policies
