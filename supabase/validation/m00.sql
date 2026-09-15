@@ -33,4 +33,4 @@ where contype = 'f'
     ('public.portal_vendedor_sessions'::regclass, 'public.vendedores'::regclass),
     ('public.portal_password_recovery_requests'::regclass, 'public.vendedores'::regclass)
   )
-order by tabla::text, conname;
+order by conrelid::regclass::text, conname;
