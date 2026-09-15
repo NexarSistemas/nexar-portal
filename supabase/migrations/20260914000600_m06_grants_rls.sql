@@ -10,10 +10,15 @@ alter table public.precios enable row level security;
 alter table public.ventas enable row level security;
 alter table public.venta_items enable row level security;
 
-grant select on public.perfiles, public.clientes, public.productos, public.planes,
-  public.precios, public.ventas, public.venta_items to authenticated;
-grant insert, update, delete on public.perfiles, public.clientes, public.productos,
-  public.planes, public.precios, public.ventas, public.venta_items to authenticated;
+-- Supabase puede aplicar default privileges amplios a tablas nuevas de public.
+-- M06 establece explicitamente el acceso minimo: anon sin privilegios directos
+-- y authenticated solo con CRUD; RLS decide luego que filas puede operar.
+revoke all privileges on public.perfiles, public.clientes, public.productos,
+  public.planes, public.precios, public.ventas, public.venta_items
+  from anon, authenticated;
+grant select, insert, update, delete on public.perfiles, public.clientes,
+  public.productos, public.planes, public.precios, public.ventas,
+  public.venta_items to authenticated;
 
 create policy perfiles_select_propio on public.perfiles for select to authenticated
   using (user_id = (select auth.uid()));
