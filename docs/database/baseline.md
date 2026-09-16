@@ -37,6 +37,7 @@ M00
   -> M06
   -> provision manual y controlada de Auth para RONA596
   -> vinculacion perfiles.vendedor_id
+  -> M06.5: Auth+RLS transicional de vendedores, licencias y comisiones
   -> validacion funcional y de RLS
   -> M07
 ```
@@ -93,7 +94,7 @@ crea los productos Nexar Comercio y Nexar Finanzas, usa `plan_comercial` como
 codigo de plan y conserva el historial de precios, moneda, importe, modalidad,
 estado y vigencias. Un codigo o precio legacy incompatible hace abortar M04.
 
-## M06 y M07: seguridad y retirada legacy
+## M06, M06.5 y M07: seguridad y retirada legacy
 
 M06 habilita RLS solo en las tablas nuevas canonicas. Las policies separan
 administradores de vendedores por `perfiles.rol`, `perfiles.activo` y
@@ -105,6 +106,23 @@ habilita ni modifica RLS, policies o grants legacy sin inventario de consumidore
 y policies existentes. La prueba funcional debe comprobar tanto las operaciones
 administrativas como las lecturas de cada vendedor antes de considerar M06
 operativa.
+
+M06.5 es una capa transicional posterior a M06 y previa a M07. Habilita para
+`authenticated` la lectura administrativa basada en `perfiles` y la lectura de
+ownership de vendedor sobre `vendedores`, `licencias` y `comisiones`. En
+las tres tablas el contrato SELECT de `authenticated` usa grants por columna:
+en `vendedores`, `id`, `codigo_vendedor`, `email`, `telefono` y `alias_cbu`;
+en `licencias`, `license_key`, `producto`, `usuario`, `plan`, `plan_vendido`,
+`expira` y `created_at`; y en `comisiones`, `tipo`, `producto`, `license_key`,
+`monto`, `estado`, `created_at` y `paid_at`. No expone columnas de Auth legacy,
+operativas ni relaciones internas solo por ser necesarias para ownership. El
+vendedor solo puede actualizar `email`, `telefono` y `alias_cbu` de su propia
+fila mediante grants por columna y una policy de ownership. Las licencias con
+`venta_id` usan la relacion canonica; solo las filas legacy sin `venta_id`
+pueden resolver el vendedor por `codigo_vendedor`. Las comisiones usan
+unicamente `vendedor_id`, sin inferir relaciones legacy no relevadas. No se
+modifican policies `portal_secret_*`, sesiones, recuperacion, dashboard ni
+columnas de Auth legacy.
 
 M07 requiere provisionar manualmente el Auth de RONA596, vincular su perfil,
 validar el flujo y RLS, migrar Portal Vendedor y Nexar Admin, revalidar el
