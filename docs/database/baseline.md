@@ -109,9 +109,12 @@ operativa.
 
 M06.5 es una capa transicional posterior a M06 y previa a M07. Habilita para
 `authenticated` la lectura administrativa basada en `perfiles` y la lectura de
-ownership de vendedor sobre `vendedores`, `licencias` y `comisiones`. El
-vendedor solo puede actualizar `email`, `telefono` y `alias_cbu` de su propia
-fila mediante grants por columna y una policy de ownership. Las licencias con
+ownership de vendedor sobre `vendedores`, `licencias` y `comisiones`. En
+`vendedores`, el contrato SELECT de `authenticated` se limita a `id`,
+`codigo_vendedor`, `email`, `telefono` y `alias_cbu`; no expone columnas de
+Auth legacy. El vendedor solo puede actualizar `email`, `telefono` y
+`alias_cbu` de su propia fila mediante grants por columna y una policy de
+ownership. Las licencias con
 `venta_id` usan la relacion canonica; solo las filas legacy sin `venta_id`
 pueden resolver el vendedor por `codigo_vendedor`. Las comisiones usan
 unicamente `vendedor_id`, sin inferir relaciones legacy no relevadas. No se

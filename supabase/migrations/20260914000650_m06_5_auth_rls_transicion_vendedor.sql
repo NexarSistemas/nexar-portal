@@ -44,18 +44,42 @@ begin
       hint = 'No combine el contrato Auth+RLS transicional con una policy legacy amplia; preservela y ajuste el inventario antes de reintentar.';
   end if;
 
-  if has_table_privilege('public', 'public.vendedores', 'INSERT')
-    or has_table_privilege('public', 'public.vendedores', 'UPDATE')
-    or has_table_privilege('public', 'public.vendedores', 'DELETE')
-    or has_table_privilege('public', 'public.licencias', 'INSERT')
-    or has_table_privilege('public', 'public.licencias', 'UPDATE')
-    or has_table_privilege('public', 'public.licencias', 'DELETE')
-    or has_table_privilege('public', 'public.comisiones', 'INSERT')
-    or has_table_privilege('public', 'public.comisiones', 'UPDATE')
-    or has_table_privilege('public', 'public.comisiones', 'DELETE')
+  if has_table_privilege('public', 'public.vendedores', 'SELECT')
+    or exists (
+      select 1
+      from pg_attribute a
+      where a.attrelid = 'public.vendedores'::regclass
+        and a.attnum > 0
+        and not a.attisdropped
+        and a.attname not in ('id', 'codigo_vendedor', 'email', 'telefono', 'alias_cbu')
+        and has_column_privilege('public', 'public.vendedores', a.attname, 'SELECT')
+    )
+    or exists (
+      select 1
+      from unnest(array['vendedores', 'licencias', 'comisiones']) as tablas(tabla)
+      cross join unnest(array['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'])
+        as privilegios(privilegio)
+      where has_table_privilege('public', format('public.%I', tablas.tabla), privilegios.privilegio)
+    )
+    or exists (
+      select 1
+      from pg_attribute a
+      where a.attrelid in (
+        'public.vendedores'::regclass,
+        'public.licencias'::regclass,
+        'public.comisiones'::regclass
+      )
+        and a.attnum > 0
+        and not a.attisdropped
+        and (
+          has_column_privilege('public', a.attrelid, a.attname, 'INSERT')
+          or has_column_privilege('public', a.attrelid, a.attname, 'UPDATE')
+          or has_column_privilege('public', a.attrelid, a.attname, 'REFERENCES')
+        )
+    )
   then
     raise exception using
-      message = 'M06.5 requiere que PUBLIC no tenga escrituras sobre las tablas transicionales.',
+      message = 'M06.5 requiere que PUBLIC no exponga columnas no seguras ni tenga escrituras sobre las tablas transicionales.',
       hint = 'No revoque grants legacy sin inventario de consumidores; releve el grant amplio antes de habilitar Auth+RLS.';
   end if;
 end
@@ -84,25 +108,30 @@ alter table public.vendedores enable row level security;
 alter table public.licencias enable row level security;
 alter table public.comisiones enable row level security;
 
--- authenticated solo puede leer estas tablas; el perfil vendedor recibe UPDATE por columna.
-grant select on public.vendedores, public.licencias, public.comisiones to authenticated;
-revoke insert, update, delete on public.vendedores, public.licencias, public.comisiones from authenticated;
+-- authenticated recibe SELECT completo solo en licencias/comisiones; vendedores
+-- conserva Auth legacy y por eso se expone por columna de forma explicita.
+revoke all privileges on table public.vendedores, public.licencias, public.comisiones from authenticated;
 do $$
 declare
-  columna text;
+  objeto record;
 begin
-  for columna in
-    select column_name
-    from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'vendedores'
-      and column_name not in ('email', 'telefono', 'alias_cbu')
+  for objeto in
+    select c.table_name, c.column_name
+    from information_schema.columns c
+    where c.table_schema = 'public'
+      and c.table_name in ('vendedores', 'licencias', 'comisiones')
   loop
-    execute format('revoke update (%I) on public.vendedores from authenticated', columna);
+    execute format(
+      'revoke all privileges (%I) on table public.%I from authenticated',
+      objeto.column_name,
+      objeto.table_name
+    );
   end loop;
 end
 $$;
+grant select (id, codigo_vendedor, email, telefono, alias_cbu) on public.vendedores to authenticated;
 grant update (email, telefono, alias_cbu) on public.vendedores to authenticated;
+grant select on public.licencias, public.comisiones to authenticated;
 
 create policy vendedores_admin_select on public.vendedores for select to authenticated
   using ((select app_private.es_admin()));

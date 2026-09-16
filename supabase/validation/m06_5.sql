@@ -71,43 +71,73 @@ where schemaname = 'public'
   )
 order by policyname;
 
-with esperados(tabla, privilegio) as (
-  values
-    ('vendedores', 'SELECT'), ('licencias', 'SELECT'), ('comisiones', 'SELECT')
-), actuales as (
-  select table_name as tabla, privilege_type as privilegio
-  from information_schema.role_table_grants
-  where table_schema = 'public' and grantee = 'authenticated'
+select
+  has_table_privilege('authenticated', 'public.vendedores', 'SELECT') as vendedores_select_tabla_indebido,
+  has_table_privilege('authenticated', 'public.licencias', 'SELECT') as licencias_select_concedido,
+  has_table_privilege('authenticated', 'public.comisiones', 'SELECT') as comisiones_select_concedido;
+
+with tablas(tabla) as (
+  values ('vendedores'), ('licencias'), ('comisiones')
+), privilegios(privilegio) as (
+  values ('INSERT'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('UPDATE')
 )
-select 'faltante' as diferencia, * from (select * from esperados except select * from actuales) d
-union all
-select 'escritura_indebida' as diferencia, * from (
-  select * from actuales
-  where tabla in ('vendedores', 'licencias', 'comisiones')
-    and privilegio in ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER')
-) d
-order by tabla, privilegio;
+select t.tabla, p.privilegio,
+  has_table_privilege('authenticated', format('public.%I', t.tabla), p.privilegio) as concedido
+from tablas t cross join privilegios p
+order by t.tabla, p.privilegio;
+
+with columnas as (
+  select c.table_name as tabla, c.column_name as columna
+  from information_schema.columns c
+  where c.table_schema = 'public'
+    and c.table_name in ('vendedores', 'licencias', 'comisiones')
+), privilegios(privilegio) as (
+  values ('INSERT'), ('REFERENCES'), ('UPDATE')
+)
+select c.tabla, c.columna, p.privilegio
+from columnas c cross join privilegios p
+where not (
+    c.tabla = 'vendedores'
+    and c.columna in ('email', 'telefono', 'alias_cbu')
+    and p.privilegio = 'UPDATE'
+  )
+  and has_column_privilege('authenticated', format('public.%I', c.tabla), c.columna, p.privilegio)
+order by c.tabla, c.columna, p.privilegio;
 
 with esperadas(columna) as (
-  values ('email'), ('telefono'), ('alias_cbu')
+  values ('id'), ('codigo_vendedor'), ('email'), ('telefono'), ('alias_cbu')
 ), actuales as (
-  select column_name as columna
-  from information_schema.role_column_grants
-  where table_schema = 'public'
-    and grantee = 'authenticated'
-    and table_name = 'vendedores'
-    and privilege_type = 'UPDATE'
+  select a.attname as columna
+  from pg_attribute a
+  where a.attrelid = 'public.vendedores'::regclass
+    and a.attnum > 0
+    and not a.attisdropped
+    and has_column_privilege('authenticated', 'public.vendedores', a.attname, 'SELECT')
 )
 select 'faltante' as diferencia, columna from (select * from esperadas except select * from actuales) d
 union all
 select 'indebida' as diferencia, columna from (select * from actuales except select * from esperadas) d
 order by columna;
 
-select
-  has_table_privilege('authenticated', 'public.vendedores', 'INSERT') as vendedor_insert_indebido,
-  has_table_privilege('authenticated', 'public.vendedores', 'DELETE') as vendedor_delete_indebido,
-  has_table_privilege('authenticated', 'public.licencias', 'INSERT, UPDATE, DELETE') as licencias_escritura_indebida,
-  has_table_privilege('authenticated', 'public.comisiones', 'INSERT, UPDATE, DELETE') as comisiones_escritura_indebida;
+with esperadas(columna) as (
+  values ('email'), ('telefono'), ('alias_cbu')
+), actuales as (
+  select a.attname as columna
+  from pg_attribute a
+  where a.attrelid = 'public.vendedores'::regclass
+    and a.attnum > 0
+    and not a.attisdropped
+    and has_column_privilege('authenticated', 'public.vendedores', a.attname, 'UPDATE')
+)
+select 'faltante' as diferencia, columna from (select * from esperadas except select * from actuales) d
+union all
+select 'indebida' as diferencia, columna from (select * from actuales except select * from esperadas) d
+order by columna;
+
+select columna,
+  not has_column_privilege('authenticated', 'public.vendedores', columna, 'SELECT') as no_seleccionable
+from (values ('password_hash'), ('password_change_required'), ('ultimo_login')) sensibles(columna)
+order by columna;
 
 select tablename, policyname, cmd, roles
 from pg_policies
