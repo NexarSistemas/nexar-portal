@@ -73,8 +73,8 @@ order by policyname;
 
 select
   has_table_privilege('authenticated', 'public.vendedores', 'SELECT') as vendedores_select_tabla_indebido,
-  has_table_privilege('authenticated', 'public.licencias', 'SELECT') as licencias_select_concedido,
-  has_table_privilege('authenticated', 'public.comisiones', 'SELECT') as comisiones_select_concedido;
+  has_table_privilege('authenticated', 'public.licencias', 'SELECT') as licencias_select_tabla_indebido,
+  has_table_privilege('authenticated', 'public.comisiones', 'SELECT') as comisiones_select_tabla_indebido;
 
 with tablas(tabla) as (
   values ('vendedores'), ('licencias'), ('comisiones')
@@ -104,20 +104,33 @@ where not (
   and has_column_privilege('authenticated', format('public.%I', c.tabla), c.columna, p.privilegio)
 order by c.tabla, c.columna, p.privilegio;
 
-with esperadas(columna) as (
-  values ('id'), ('codigo_vendedor'), ('email'), ('telefono'), ('alias_cbu')
+with esperadas(tabla, columna) as (
+  values
+    ('vendedores', 'id'), ('vendedores', 'codigo_vendedor'), ('vendedores', 'email'),
+    ('vendedores', 'telefono'), ('vendedores', 'alias_cbu'),
+    ('licencias', 'license_key'), ('licencias', 'producto'), ('licencias', 'usuario'),
+    ('licencias', 'plan'), ('licencias', 'plan_vendido'), ('licencias', 'expira'),
+    ('licencias', 'created_at'),
+    ('comisiones', 'tipo'), ('comisiones', 'producto'), ('comisiones', 'license_key'),
+    ('comisiones', 'monto'), ('comisiones', 'estado'), ('comisiones', 'created_at'),
+    ('comisiones', 'paid_at')
 ), actuales as (
-  select a.attname as columna
+  select c.relname as tabla, a.attname as columna
   from pg_attribute a
-  where a.attrelid = 'public.vendedores'::regclass
+  join pg_class c on c.oid = a.attrelid
+  where a.attrelid in (
+      'public.vendedores'::regclass,
+      'public.licencias'::regclass,
+      'public.comisiones'::regclass
+    )
     and a.attnum > 0
     and not a.attisdropped
-    and has_column_privilege('authenticated', 'public.vendedores', a.attname, 'SELECT')
+    and has_column_privilege('authenticated', a.attrelid, a.attname, 'SELECT')
 )
-select 'faltante' as diferencia, columna from (select * from esperadas except select * from actuales) d
+select 'faltante' as diferencia, tabla, columna from (select * from esperadas except select * from actuales) d
 union all
-select 'indebida' as diferencia, columna from (select * from actuales except select * from esperadas) d
-order by columna;
+select 'indebida' as diferencia, tabla, columna from (select * from actuales except select * from esperadas) d
+order by tabla, columna;
 
 with esperadas(columna) as (
   values ('email'), ('telefono'), ('alias_cbu')
@@ -138,6 +151,17 @@ select columna,
   not has_column_privilege('authenticated', 'public.vendedores', columna, 'SELECT') as no_seleccionable
 from (values ('password_hash'), ('password_change_required'), ('ultimo_login')) sensibles(columna)
 order by columna;
+
+select c.table_name as tabla, c.column_name as columna,
+  not has_column_privilege('authenticated', format('public.%I', c.table_name), c.column_name, 'SELECT')
+    as no_seleccionable
+from information_schema.columns c
+where c.table_schema = 'public'
+  and (
+    (c.table_name = 'licencias' and c.column_name in ('hwid', 'hwids', 'limits', 'venta_id', 'codigo_vendedor'))
+    or (c.table_name = 'comisiones' and c.column_name in ('vendedor_id', 'venta_id', 'pago_id'))
+  )
+order by c.table_name, c.column_name;
 
 select tablename, policyname, cmd, roles
 from pg_policies

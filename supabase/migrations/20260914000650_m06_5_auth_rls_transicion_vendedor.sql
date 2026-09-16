@@ -9,8 +9,12 @@ begin
     select * from (values
       ('vendedores', 'id'), ('vendedores', 'codigo_vendedor'),
       ('vendedores', 'email'), ('vendedores', 'telefono'), ('vendedores', 'alias_cbu'),
-      ('licencias', 'venta_id'), ('licencias', 'codigo_vendedor'),
-      ('comisiones', 'vendedor_id')
+      ('licencias', 'license_key'), ('licencias', 'producto'), ('licencias', 'usuario'),
+      ('licencias', 'plan'), ('licencias', 'plan_vendido'), ('licencias', 'expira'),
+      ('licencias', 'created_at'), ('licencias', 'venta_id'), ('licencias', 'codigo_vendedor'),
+      ('comisiones', 'tipo'), ('comisiones', 'producto'), ('comisiones', 'license_key'),
+      ('comisiones', 'monto'), ('comisiones', 'estado'), ('comisiones', 'created_at'),
+      ('comisiones', 'paid_at'), ('comisiones', 'vendedor_id')
     ) as columnas(tabla, columna)
   loop
     if not exists (
@@ -45,14 +49,27 @@ begin
   end if;
 
   if has_table_privilege('public', 'public.vendedores', 'SELECT')
+    or has_table_privilege('public', 'public.licencias', 'SELECT')
+    or has_table_privilege('public', 'public.comisiones', 'SELECT')
     or exists (
       select 1
       from pg_attribute a
-      where a.attrelid = 'public.vendedores'::regclass
+      where a.attrelid in (
+        'public.vendedores'::regclass,
+        'public.licencias'::regclass,
+        'public.comisiones'::regclass
+      )
         and a.attnum > 0
         and not a.attisdropped
-        and a.attname not in ('id', 'codigo_vendedor', 'email', 'telefono', 'alias_cbu')
-        and has_column_privilege('public', 'public.vendedores', a.attname, 'SELECT')
+        and not (
+          (a.attrelid = 'public.vendedores'::regclass
+            and a.attname in ('id', 'codigo_vendedor', 'email', 'telefono', 'alias_cbu'))
+          or (a.attrelid = 'public.licencias'::regclass
+            and a.attname in ('license_key', 'producto', 'usuario', 'plan', 'plan_vendido', 'expira', 'created_at'))
+          or (a.attrelid = 'public.comisiones'::regclass
+            and a.attname in ('tipo', 'producto', 'license_key', 'monto', 'estado', 'created_at', 'paid_at'))
+        )
+        and has_column_privilege('public', a.attrelid, a.attname, 'SELECT')
     )
     or exists (
       select 1
@@ -108,8 +125,8 @@ alter table public.vendedores enable row level security;
 alter table public.licencias enable row level security;
 alter table public.comisiones enable row level security;
 
--- authenticated recibe SELECT completo solo en licencias/comisiones; vendedores
--- conserva Auth legacy y por eso se expone por columna de forma explicita.
+-- Las tres tablas se exponen por columna; las columnas de ownership siguen
+-- disponibles para RLS, pero no se entregan al cliente Auth por ese motivo.
 revoke all privileges on table public.vendedores, public.licencias, public.comisiones from authenticated;
 do $$
 declare
@@ -131,7 +148,10 @@ end
 $$;
 grant select (id, codigo_vendedor, email, telefono, alias_cbu) on public.vendedores to authenticated;
 grant update (email, telefono, alias_cbu) on public.vendedores to authenticated;
-grant select on public.licencias, public.comisiones to authenticated;
+grant select (license_key, producto, usuario, plan, plan_vendido, expira, created_at)
+  on public.licencias to authenticated;
+grant select (tipo, producto, license_key, monto, estado, created_at, paid_at)
+  on public.comisiones to authenticated;
 
 create policy vendedores_admin_select on public.vendedores for select to authenticated
   using ((select app_private.es_admin()));
