@@ -7,6 +7,8 @@
   font-weight:400;
   --navy:#102d4a;
   --blue:#2865a5;
+  --green:#16a36a;
+  --green-dark:#0d7b50;
   --muted:#6d7d8d;
   --line:#e4eaf0
 }
@@ -32,27 +34,35 @@ button,input{
   margin:auto;
   padding:56px 0
 }
-.wordmark{
-  font-size:18px;
-  font-weight:800;
-  letter-spacing:.08em;
-  color:var(--navy);
-  text-decoration:none;
+.brand-link{
   display:inline-flex;
-  flex-direction:column;
-  line-height:1
+  width:max-content;
+  text-decoration:none
 }
-.wordmark span{
-  font-size:8px;
-  letter-spacing:.24em;
-  margin-top:5px
+.brand-logo{
+  display:block;
+  width:118px;
+  height:auto
+}
+.sidebar-brand{
+  background:#fffffff2;
+  padding:7px 9px;
+  border-radius:8px
+}
+.sidebar-brand .brand-logo{
+  width:122px
 }
 .eyebrow,.nav-label{
   font-size:11px;
   text-transform:uppercase;
   letter-spacing:.13em;
-  font-weight:700;
-  color:var(--blue)
+  font-weight:700
+}
+.eyebrow{
+  color:var(--green-dark)
+}
+.nav-label{
+  color:#8eabc4
 }
 .login-card .eyebrow{
   margin:64px 0 10px
@@ -164,9 +174,6 @@ button,input{
   display:flex;
   flex-direction:column;
   padding:30px 22px
-}
-.sidebar .wordmark{
-  color:white
 }
 .nav-label{
   color:#8eabc4;
@@ -280,8 +287,11 @@ button,input{
     grid-template-columns:1fr auto;
     align-items:center
   }
-  .sidebar .wordmark span{
-    font-size:7px
+  .sidebar-brand{
+    padding:6px 8px
+  }
+  .sidebar-brand .brand-logo{
+    width:108px
   }
   .nav-label,.sidebar nav{
     display:none

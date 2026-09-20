@@ -1,10 +1,12 @@
+import { NEXAR_LOGO_DATA_URI } from '../brand/assets.js';
+
 const roleNames = { admin: 'Administración', vendedor: 'Vendedor' };
 
 export function renderLogin(root, { message = '', onSubmit }) {
   root.innerHTML = `
     <main class="login-layout">
       <section class="login-card" aria-labelledby="login-title">
-        <a class="wordmark" href="./" aria-label="Nexar Sistemas, inicio">NEXAR<span>SISTEMAS</span></a>
+        <a class="brand-link" href="./" aria-label="Nexar Sistemas, inicio"><img class="brand-logo" src="${NEXAR_LOGO_DATA_URI}" alt="Nexar Sistemas" /></a>
         <p class="eyebrow">Portal seguro</p>
         <h1 id="login-title">Ingresar</h1>
         <p class="muted">Accedé con las credenciales de tu cuenta.</p>
@@ -47,7 +49,7 @@ export function renderShell(root, profile, onLogout) {
   root.innerHTML = `
     <div class="portal-layout">
       <aside class="sidebar">
-        <a class="wordmark" href="#inicio">NEXAR<span>SISTEMAS</span></a>
+        <a class="brand-link sidebar-brand" href="#inicio" aria-label="Nexar Sistemas"><img class="brand-logo" src="${NEXAR_LOGO_DATA_URI}" alt="Nexar Sistemas" /></a>
         <p class="nav-label">ESPACIO DE TRABAJO</p>
         <nav aria-label="Navegación principal"><a class="nav-item active" href="#inicio">Inicio</a></nav>
         <div class="sidebar-bottom"><span class="role-pill">${roleNames[profile.rol]}</span></div>
