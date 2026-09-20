@@ -1,8 +1,15 @@
+import { NEXAR_FAVICON_DATA_URI } from './brand/assets.js';
 import { signIn, signOut, resolveProfile } from './auth/auth.js';
 import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
+
+const favicon = document.createElement('link');
+favicon.rel = 'icon';
+favicon.type = 'image/png';
+favicon.href = NEXAR_FAVICON_DATA_URI;
+document.head.append(favicon);
 
 const root = document.querySelector('#app');
 let profile = null;
