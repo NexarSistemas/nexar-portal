@@ -39,6 +39,7 @@ M00
   -> vinculacion perfiles.vendedor_id
   -> M06.5: Auth+RLS transicional de vendedores, licencias y comisiones
   -> validacion funcional y de RLS
+  -> M06.6: restringe ejecución pública del RPC legacy no consumido
   -> M07
 ```
 
@@ -91,7 +92,7 @@ crea los productos Nexar Comercio y Nexar Finanzas, usa `plan_comercial` como
 codigo de plan y conserva el historial de precios, moneda, importe, modalidad,
 estado y vigencias. Un codigo o precio legacy incompatible hace abortar M04.
 
-## M06, M06.5 y M07: seguridad y retirada legacy
+## M06, M06.5, M06.6 y M07: seguridad y retirada legacy
 
 M06 habilita RLS solo en las tablas nuevas canonicas. Las policies separan
 administradores de vendedores por `perfiles.rol`, `perfiles.activo` y
@@ -121,6 +122,8 @@ unicamente `vendedor_id`, sin inferir relaciones legacy no relevadas. No se
 modifican policies `portal_secret_*`, sesiones, recuperacion, dashboard ni
 columnas de Auth legacy.
 
+M06.6 conserva `portal_dashboard_vendedor(text)` por trazabilidad, pero revoca su ejecución a `PUBLIC`, `anon` y `authenticated` después de verificar que los consumidores runtime actuales ya no lo usan. `service_role` conserva ejecución. No elimina sesiones, columnas ni otros objetos legacy y no ejecuta M07.
+
 M07 requiere provisionar manualmente el Auth de la identidad maestra, vincular su perfil,
 validar el flujo y RLS, retirar o reemplazar los consumidores legacy necesarios,
 revalidar el inventario externo y aprobar expresamente el retiro. Mientras existan esos
@@ -132,7 +135,7 @@ por ahora. El baseline no elimina esas estructuras de manera anticipada.
 
 ## Validacion y reversibilidad
 
-Las consultas en `supabase/validation/m00.sql` a `m07.sql` son de lectura y se
+Las consultas en `supabase/validation/m00.sql` a `m07.sql`, incluida `m06_6.sql`, son de lectura y se
 ejecutan despues de cada paso en el entorno controlado. Verifican tablas,
 columnas, tipos, constraints, indices, RLS, policies, grants y las condiciones
 de los gates. No sustituyen una validacion funcional contra consumidores reales.
