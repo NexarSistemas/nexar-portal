@@ -20,12 +20,15 @@ correspondiente. No aplicar migraciones remotas sin autorización explícita.
 
 ## Saneamiento condicionado
 
-`RONA596` / Rolando Navarta es el único vendedor real que se debe conservar como
-entidad y se conserva su UUID real. Sus movimientos actuales son pruebas y se
-pueden eliminar. Los demás vendedores, referidos, solicitudes, pagos,
-comisiones y movimientos actuales se consideran pruebas salvo evidencia concreta
-en contrario. Las licencias actuales de Comercio y Finanzas son pruebas y se
-pueden eliminar o regenerar; al regenerarlas se puede reasignar `RONA596`.
+Existe una única entidad comercial maestra que debe preservarse durante el
+saneamiento controlado. Su identificador operativo se resuelve en tiempo de
+ejecución según las migraciones ya versionadas; no se deben hardcodear UUID ni
+datos personales adicionales en documentación pública.
+
+Los demás vendedores, referidos, solicitudes, pagos, comisiones y movimientos
+del snapshot inicial se consideran de prueba salvo evidencia concreta en
+contrario. Las licencias actuales de Comercio y Finanzas también se tratan como
+datos de prueba regenerables bajo el procedimiento documentado.
 
 Las secuencias autoincrementales se ajustan después del saneamiento solo según
 el schema real. Nunca hardcodear UUID ni relaciones no demostradas. M04 y M07

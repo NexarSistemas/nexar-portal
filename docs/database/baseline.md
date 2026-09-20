@@ -35,7 +35,7 @@ M00
   -> M04
   -> M05
   -> M06
-  -> provision manual y controlada de Auth para RONA596
+  -> provision manual y controlada de Auth para la identidad maestra
   -> vinculacion perfiles.vendedor_id
   -> M06.5: Auth+RLS transicional de vendedores, licencias y comisiones
   -> validacion funcional y de RLS
@@ -78,14 +78,11 @@ altera columnas legacy que el repositorio no demuestra.
 ## M04: saneamiento condicionado
 
 M04 exige `app.nexar_portal_m04_approved = 'approved'` y un preflight del
-snapshot: tablas y columnas requeridas, exactamente RONA596 y un vendedor de
-prueba, recuperaciones de password preservables, identidades verificadas y
-catalogo legacy compatible. Resuelve RONA596 mediante `codigo_vendedor`, nunca
-por UUID versionado. Si una condicion cambia, aborta antes de borrar.
+snapshot: tablas y columnas requeridas, la identidad maestra esperada y un vendedor de prueba, recuperaciones de password preservables, identidades verificadas y catalogo legacy compatible. La identidad maestra se resuelve mediante `codigo_vendedor`, nunca por UUID versionado. Si una condicion cambia, aborta antes de borrar.
 
 Con el gate y el preflight aprobados, elimina solo movimientos de prueba de
 licencias, pagos, comisiones, referidos y solicitudes, y luego el vendedor de
-prueba. No altera `admin_audit_log`, `precios_planes`, RONA596, sus sesiones o
+prueba. No altera `admin_audit_log`, `precios_planes`, la identidad maestra, sus sesiones o
 auth legacy, recuperaciones de password, newsletter ni suscripciones. Las
 identities se reinician solo para tablas ya vacias.
 
@@ -124,9 +121,9 @@ unicamente `vendedor_id`, sin inferir relaciones legacy no relevadas. No se
 modifican policies `portal_secret_*`, sesiones, recuperacion, dashboard ni
 columnas de Auth legacy.
 
-M07 requiere provisionar manualmente el Auth de RONA596, vincular su perfil,
-validar el flujo y RLS, migrar Portal Vendedor y Nexar Admin, revalidar el
-inventario externo y aprobar expresamente el retiro. Mientras existan esos
+M07 requiere provisionar manualmente el Auth de la identidad maestra, vincular su perfil,
+validar el flujo y RLS, retirar o reemplazar los consumidores legacy necesarios,
+revalidar el inventario externo y aprobar expresamente el retiro. Mientras existan esos
 consumidores, el guard aborta de forma intencional. El inventario concreto de
 retiro incluye `portal_dashboard_vendedor(text)`, policies `portal_secret_*`,
 sesiones, recuperacion propia y las columnas `password_hash`,

@@ -18,7 +18,7 @@ M07.
 | `newsletter_preference_requests` | Fuera del saneamiento M04. |
 | `pagos` | Movimientos de prueba saneables; recibe relaciones canonicas nullable en M03. |
 | `portal_password_recovery_requests` | Recuperacion legacy operativa; se preserva. |
-| `portal_vendedor_sessions` | Sesiones legacy operativas; se preservan las de RONA596. |
+| `portal_vendedor_sessions` | Sesiones legacy operativas; se preservan las de la identidad maestra. |
 | `precios_planes` | Catalogo comercial legacy en coexistencia y fuente de M04. |
 | `referidos` | Datos de prueba saneables. |
 | `solicitudes_demo`, `solicitudes_licencia`, `solicitudes_soporte`, `solicitudes_upgrade`, `solicitudes_vendedores` | Solicitudes actuales de prueba saneables. |
@@ -31,12 +31,10 @@ FK verificadas son:
 | Relacion | `ON DELETE` | Efecto operativo |
 | --- | --- | --- |
 | `referidos.vendedor_id -> vendedores.id` | `RESTRICT` | M04 elimina referidos antes de vendedores de prueba. |
-| `portal_vendedor_sessions.vendedor_id -> vendedores.id` | `CASCADE` | Las sesiones legacy siguen bloqueando M07; M04 preserva las de RONA596. |
+| `portal_vendedor_sessions.vendedor_id -> vendedores.id` | `CASCADE` | Las sesiones legacy siguen bloqueando M07; M04 preserva las de la identidad maestra. |
 | `portal_password_recovery_requests.vendedor_id -> vendedores.id` | `SET NULL` | M04 no elimina ni modifica recuperaciones; aborta si una referencia al vendedor de prueba exigiria alterarlas. |
 
-`vendedores.codigo_vendedor` identifica la entidad comercial real. M04 resuelve
-la unica fila con `codigo_vendedor = 'RONA596'` dentro de la transaccion y no
-versiona su UUID. Las columnas `password_hash`, `password_change_required` y
+`vendedores.codigo_vendedor` identifica la entidad comercial real. M04 resuelve la identidad maestra dentro de la transacción y no versiona su UUID. Las columnas `password_hash`, `password_change_required` y
 `ultimo_login` siguen siendo auth legacy operativo. `vendedores.es_admin` se
 conserva mientras existan consumidores externos.
 
@@ -82,23 +80,17 @@ necesario para solicitudes externas. No endurece otras policies legacy.
 
 | Clasificacion | Objetos o datos |
 | --- | --- |
-| Conservar | `admin_audit_log`, `precios_planes`, RONA596, su auth y sesiones, recuperaciones de password, newsletter y suscripciones. |
+| Conservar | `admin_audit_log`, `precios_planes`, la identidad maestra, su auth y sesiones, recuperaciones de password, newsletter y suscripciones. |
 | Evolucionar | `vendedores`, `pagos`, `licencias`, `comisiones` con columnas/FK nullable de M03. |
 | Sanear en M04 aprobada | Datos de prueba de licencias, pagos, comisiones, referidos, solicitudes enumeradas y el vendedor de prueba. |
 | Retirar solo en M07 aprobada | `portal_dashboard_vendedor(text)`, policies `portal_secret_*`, sesiones, recuperacion propia, columnas de auth propia y secretos compartidos mediante una operacion externa. |
 
 ## Consumidores externos que bloquean M07
 
-`NexarSistemas/nexarsistemas.github.io` mantiene
-`vendedores/js/portal-vendedor.js`, las funciones Netlify
-`portal-login-vendedor.js`, `portal-change-password.js`,
-`portal-update-profile.js` y `portal-password-recovery.js`, y documentacion SQL
-legacy relacionada. `rolojnb/nexar-admin` consume `password_hash`,
-`password_change_required`, `ultimo_login` y la recuperacion de acceso de
-vendedores.
+Existen consumidores externos legacy del Portal Vendedor y del panel administrativo anterior. Su inventario detallado debe mantenerse fuera de esta documentación pública y revalidarse antes de M07.
 
 Ninguno de esos consumidores se modifica en este repositorio. M07 sigue
 abortando hasta que Auth se provisione controladamente, exista un perfil activo
-vinculado a RONA596, se validen funcionalidad y RLS, se migren Portal Vendedor
-y Nexar Admin, se revalide el inventario externo y se otorgue aprobacion
+vinculado a la identidad maestra, se validen funcionalidad y RLS, se retiren o reemplacen los consumidores legacy necesarios,
+se revalide el inventario externo y se otorgue aprobacion
 explicita de retiro.

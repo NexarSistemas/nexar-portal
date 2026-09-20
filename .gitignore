@@ -11,10 +11,6 @@ _site/
 /vendor
 
 # Specific ignore for GitHub Pages
-# GitHub Pages will always use its own deployed version of pages-gem
-# This means GitHub Pages will NOT use your Gemfile.lock and therefore it is
-# counterproductive to check this file into the repository.
-# Details at https://github.com/github/pages-gem/issues/768
 Gemfile.lock
 
 # Local environment files; public examples remain versionable.
@@ -25,3 +21,26 @@ Gemfile.lock
 # Frontend dependencies and build output.
 node_modules/
 dist/
+
+# Local credentials, keys and certificates.
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+credentials*.json
+service-account*.json
+
+# Backups, dumps, logs and local database artifacts.
+*.dump
+*.sql.gz
+*.backup
+*.bak
+*.log
+*.sqlite
+*.sqlite3
+
+# Common local editor/OS artifacts.
+.DS_Store
+Thumbs.db
