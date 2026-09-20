@@ -4,7 +4,7 @@ export function renderLogin(root, { message = '', onSubmit }) {
   root.innerHTML = `
     <main class="login-layout">
       <section class="login-card" aria-labelledby="login-title">
-        <a class="wordmark" href="/" aria-label="Nexar Sistemas, inicio">NEXAR<span>SISTEMAS</span></a>
+        <a class="wordmark" href="./" aria-label="Nexar Sistemas, inicio">NEXAR<span>SISTEMAS</span></a>
         <p class="eyebrow">Portal seguro</p>
         <h1 id="login-title">Ingresar</h1>
         <p class="muted">Accedé con las credenciales de tu cuenta.</p>
