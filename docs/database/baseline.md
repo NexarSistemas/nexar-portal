@@ -122,8 +122,8 @@ modifican policies `portal_secret_*`, sesiones, recuperacion, dashboard ni
 columnas de Auth legacy.
 
 M07 requiere provisionar manualmente el Auth de la identidad maestra, vincular su perfil,
-validar el flujo y RLS, migrar Portal Vendedor y Nexar Admin, revalidar el
-inventario externo y aprobar expresamente el retiro. Mientras existan esos
+validar el flujo y RLS, retirar o reemplazar los consumidores legacy necesarios,
+revalidar el inventario externo y aprobar expresamente el retiro. Mientras existan esos
 consumidores, el guard aborta de forma intencional. El inventario concreto de
 retiro incluye `portal_dashboard_vendedor(text)`, policies `portal_secret_*`,
 sesiones, recuperacion propia y las columnas `password_hash`,
