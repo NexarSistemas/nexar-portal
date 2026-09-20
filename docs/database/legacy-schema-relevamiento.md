@@ -31,7 +31,7 @@ FK verificadas son:
 | Relacion | `ON DELETE` | Efecto operativo |
 | --- | --- | --- |
 | `referidos.vendedor_id -> vendedores.id` | `RESTRICT` | M04 elimina referidos antes de vendedores de prueba. |
-| `portal_vendedor_sessions.vendedor_id -> vendedores.id` | `CASCADE` | Las sesiones legacy siguen bloqueando M07; M04 preserva las de RONA596. |
+| `portal_vendedor_sessions.vendedor_id -> vendedores.id` | `CASCADE` | Las sesiones legacy siguen bloqueando M07; M04 preserva las de la identidad maestra. |
 | `portal_password_recovery_requests.vendedor_id -> vendedores.id` | `SET NULL` | M04 no elimina ni modifica recuperaciones; aborta si una referencia al vendedor de prueba exigiria alterarlas. |
 
 `vendedores.codigo_vendedor` identifica la entidad comercial real. M04 resuelve la identidad maestra dentro de la transacción y no versiona su UUID. Las columnas `password_hash`, `password_change_required` y
@@ -91,6 +91,6 @@ Existen consumidores externos legacy del Portal Vendedor y del panel administrat
 
 Ninguno de esos consumidores se modifica en este repositorio. M07 sigue
 abortando hasta que Auth se provisione controladamente, exista un perfil activo
-vinculado a la identidad maestra, se validen funcionalidad y RLS, se migren Portal Vendedor
-y Nexar Admin, se revalide el inventario externo y se otorgue aprobacion
+vinculado a la identidad maestra, se validen funcionalidad y RLS, se retiren o reemplacen los consumidores legacy necesarios,
+se revalide el inventario externo y se otorgue aprobacion
 explicita de retiro.
