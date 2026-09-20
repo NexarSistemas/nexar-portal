@@ -22,16 +22,20 @@ npm run preview
 
 ## Configuración
 
-Copiá `.env.example` a `.env` y completá las variables públicas del proyecto Supabase:
+Copiá `.env.example` a `.env` y completá únicamente variables públicas del proyecto Supabase:
 
 - `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY` (o la clave pública publishable del proyecto)
+- `VITE_SUPABASE_ANON_KEY` (o la clave pública publishable equivalente)
 
-No agregues claves secretas ni `service_role` al frontend.
+Todo valor expuesto mediante `VITE_*` queda incorporado al bundle del navegador y debe considerarse público. Nunca usar `service_role`, secret keys, passwords, tokens privados ni credenciales de backend en GitHub Pages.
 
 ## Acceso
 
 El login utiliza Supabase Auth con email y contraseña. Tras iniciar sesión, el frontend obtiene el perfil propio desde `public.perfiles` y exige que esté activo y tenga rol `admin` o `vendedor`; el rol vendedor también requiere `vendedor_id`. La sesión se restaura desde Supabase Auth. RLS sigue siendo la frontera de autorización.
+
+## Publicación
+
+Antes de publicar el repositorio o desplegar GitHub Pages, seguir la checklist de [seguridad previa a publicación](docs/security/publicacion.md).
 
 ```sh
 npm test
