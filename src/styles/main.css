@@ -41,7 +41,7 @@ button,input{
 }
 .brand-logo{
   display:block;
-  width:118px;
+  width:150px;
   height:auto
 }
 .sidebar-brand{
@@ -65,7 +65,7 @@ button,input{
   color:#8eabc4
 }
 .login-card .eyebrow{
-  margin:64px 0 10px
+  margin:50px 0 10px
 }
 .login-card h1,.welcome h1{
   font-size:34px;
