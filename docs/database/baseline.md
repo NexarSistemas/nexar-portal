@@ -149,8 +149,9 @@ Todas fijan `search_path` vacío y su ejecución queda restringida a
   Es de solo lectura: escanear nunca crea ni confirma movimientos.
 - `fidelizacion_confirmar_earn` deriva la cuenta desde `auth.uid()`, valida
   QR, tenant, cuenta, tipo, estado y expiración, bloquea la operación con
-  `FOR UPDATE` y crea el movimiento positivo junto con el estado
-  `confirmed` en una sola transacción.
+  `FOR UPDATE` y bloquea en exclusiva la fila de cuenta con `FOR UPDATE OF a`
+  antes de insertar y calcular el saldo. Crea el movimiento positivo junto
+  con el estado `confirmed` en una sola transacción.
 
 La FK compuesta entre operación y movimiento conserva la igualdad de tenant,
 cuenta, tipo y puntos. `UNIQUE (operation_id)` impide un segundo movimiento

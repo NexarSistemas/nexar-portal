@@ -88,6 +88,7 @@ from (
 select
   pg_catalog.position('public_qr_code' in definicion) > 0 as valida_qr,
   pg_catalog.position('fidelizacion_accounts' in definicion) > 0 as valida_cuenta_cliente,
+  pg_catalog.position('for update of a' in definicion) > 0 as bloquea_cuenta_en_exclusiva,
   pg_catalog.position('for update' in definicion) > 0 as bloquea_operacion,
   pg_catalog.position('fidelizacion_point_movements' in definicion) > 0 as crea_movimiento,
   pg_catalog.position('set estado = ''confirmed''' in definicion) > 0 as confirma_operacion,

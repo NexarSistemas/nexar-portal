@@ -194,7 +194,7 @@ begin
    and a.activo
   where t.public_qr_code = p_public_qr_code
     and t.activo
-  for share of t, a;
+  for update of a;
 
   if v_tenant_id is null then
     raise exception using
