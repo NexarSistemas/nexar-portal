@@ -69,7 +69,7 @@ with esperadas(constraint_name) as (
     ('fidelizacion_operations_tenant_account_fkey'),
     ('fidelizacion_operations_tenant_reward_fkey'),
     ('fidelizacion_operations_tenant_idempotency_key_key'),
-    ('fidelizacion_operations_tenant_id_account_tipo_key'),
+    ('fidelizacion_operations_tenant_id_account_tipo_puntos_key'),
     ('fidelizacion_operations_tenant_id_account_reward_key'),
     ('fidelizacion_point_movements_operation_fkey'),
     ('fidelizacion_point_movements_operation_id_key'),
@@ -82,6 +82,55 @@ select constraint_name as constraint_faltante
 from esperadas e
 where not exists (select 1 from pg_constraint c where c.conname = e.constraint_name)
 order by constraint_name;
+
+with esperada(columna) as (
+  values ('puntos_movimiento'::text)
+)
+select a.attname as columna_faltante_o_no_generada,
+       a.attgenerated as tipo_generacion,
+       pg_get_expr(d.adbin, d.adrelid) as expresion,
+       coalesce(a.attgenerated = 's'
+         and position('tipo' in pg_get_expr(d.adbin, d.adrelid)) > 0
+         and position('puntos' in pg_get_expr(d.adbin, d.adrelid)) > 0, false)
+         as puntos_firmados_derivados_de_tipo_y_puntos
+from esperada e
+left join pg_attribute a
+  on a.attrelid = to_regclass('public.fidelizacion_operations')
+  and a.attname = e.columna
+  and a.attnum > 0
+left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum;
+
+select con.conname, pg_get_constraintdef(con.oid) as definicion,
+       array(
+         select a.attname
+         from unnest(con.conkey) with ordinality as k(attnum, orden)
+         join pg_attribute a on a.attrelid = con.conrelid and a.attnum = k.attnum
+         order by k.orden
+       ) = array['tenant_id', 'operation_id', 'account_id', 'tipo', 'puntos']::name[]
+         as fk_incluye_puntos_movimiento,
+       array(
+         select a.attname
+         from unnest(con.confkey) with ordinality as k(attnum, orden)
+         join pg_attribute a on a.attrelid = con.confrelid and a.attnum = k.attnum
+         order by k.orden
+       ) = array['tenant_id', 'id', 'account_id', 'tipo', 'puntos_movimiento']::name[]
+         as fk_apunta_a_puntos_firmados
+from pg_constraint con
+where con.conrelid = 'public.fidelizacion_point_movements'::regclass
+  and con.conname = 'fidelizacion_point_movements_operation_fkey';
+
+select con.conname,
+       array(
+         select a.attname
+         from unnest(con.conkey) with ordinality as k(attnum, orden)
+         join pg_attribute a on a.attrelid = con.conrelid and a.attnum = k.attnum
+         order by k.orden
+       ) = array['tenant_id', 'id', 'account_id', 'tipo', 'puntos_movimiento']::name[]
+         as unique_respalda_fk_de_movimientos
+from pg_constraint con
+where con.conrelid = 'public.fidelizacion_operations'::regclass
+  and con.conname = 'fidelizacion_operations_tenant_id_account_tipo_puntos_key'
+  and con.contype = 'u';
 
 select conname, conrelid::regclass as tabla, confrelid::regclass as referencia,
        pg_get_constraintdef(oid) as definicion

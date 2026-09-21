@@ -41,6 +41,7 @@ values
   ('40000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000003', 'earn', 40, null, 'confirmed', now(), 'prueba-earn-b'),
   ('40000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'redeem', 10, '30000000-0000-4000-8000-000000000001', 'confirmed', now(), 'prueba-redeem-a1');
 
+-- Pares validos: earn 25 -> +25 y redeem 10 -> -10.
 insert into public.fidelizacion_point_movements
   (id, tenant_id, account_id, tipo, puntos, operation_id)
 values
@@ -218,6 +219,8 @@ reset role;
 
 -- Integridad: duplicados e IDs cross-tenant fallan incluso como rol privilegiado.
 do $$
+declare
+  v_constraint_name text;
 begin
   begin
     insert into public.fidelizacion_accounts (tenant_id, user_id)
@@ -270,6 +273,18 @@ begin
   values
     ('40000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'earn', 5, 'confirmed', now(), 'cross-account-movement');
 
+  -- Operacion redeem sin redencion previa, reservada al test FK cross-tenant.
+  insert into public.fidelizacion_operations
+    (id, tenant_id, account_id, tipo, puntos, reward_id, estado, confirmed_at, idempotency_key)
+  values
+    ('40000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'redeem', 10, '30000000-0000-4000-8000-000000000001', 'confirmed', now(), 'cross-tenant-redemption');
+
+  insert into public.fidelizacion_operations
+    (id, tenant_id, account_id, tipo, puntos, reward_id, estado, confirmed_at, idempotency_key)
+  values
+    ('40000000-0000-4000-8000-000000000007', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'earn', 25, null, 'confirmed', now(), 'earn-points-mismatch'),
+    ('40000000-0000-4000-8000-000000000008', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'redeem', 10, '30000000-0000-4000-8000-000000000001', 'confirmed', now(), 'redeem-points-mismatch');
+
   begin
     insert into public.fidelizacion_point_movements
       (tenant_id, account_id, tipo, puntos, operation_id)
@@ -291,13 +306,45 @@ begin
   end;
 
   begin
+    insert into public.fidelizacion_point_movements
+      (tenant_id, account_id, tipo, puntos, operation_id)
+    values
+      ('10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'earn', 1, '40000000-0000-4000-8000-000000000007');
+    raise exception 'Un movimiento earn acepto puntos distintos de su operacion.';
+  exception
+    when foreign_key_violation then
+      get stacked diagnostics v_constraint_name = constraint_name;
+      if v_constraint_name <> 'fidelizacion_point_movements_operation_fkey' then
+        raise exception 'El earn fallo por una constraint inesperada: %.', v_constraint_name;
+      end if;
+  end;
+
+  begin
+    insert into public.fidelizacion_point_movements
+      (tenant_id, account_id, tipo, puntos, operation_id)
+    values
+      ('10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'redeem', -5, '40000000-0000-4000-8000-000000000008');
+    raise exception 'Un movimiento redeem acepto puntos distintos de su operacion.';
+  exception
+    when foreign_key_violation then
+      get stacked diagnostics v_constraint_name = constraint_name;
+      if v_constraint_name <> 'fidelizacion_point_movements_operation_fkey' then
+        raise exception 'El redeem fallo por una constraint inesperada: %.', v_constraint_name;
+      end if;
+  end;
+
+  begin
     insert into public.fidelizacion_redemptions
       (tenant_id, account_id, reward_id, operation_id, puntos_requeridos, estado)
     values
-      ('10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000002', '40000000-0000-4000-8000-000000000004', 20, 'confirmed');
-    raise exception 'Una redencion acepto una recompensa de otro tenant.';
+      ('10000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000003', '30000000-0000-4000-8000-000000000002', '40000000-0000-4000-8000-000000000006', 20, 'confirmed');
+    raise exception 'Una redencion acepto una operacion de otro tenant.';
   exception
-    when foreign_key_violation then null;
+    when foreign_key_violation then
+      get stacked diagnostics v_constraint_name = constraint_name;
+      if v_constraint_name <> 'fidelizacion_redemptions_operation_fkey' then
+        raise exception 'La redencion cross-tenant fallo por una constraint inesperada: %.', v_constraint_name;
+      end if;
   end;
 
   begin

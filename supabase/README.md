@@ -30,8 +30,9 @@ del Portal Vendedor siguen coexistiendo. No hay migracion de passwords ni
 provision de usuarios Auth en este baseline.
 
 La prueba transaccional `supabase/tests/fidelizacion_fase1_rls.sql` usa fixtures
-sintéticos, valida aislamiento e integridad y finaliza con `ROLLBACK`. No debe
-ejecutarse contra el proyecto remoto sin una autorización separada.
+sintéticos, valida aislamiento e integridad —incluida la igualdad entre los
+puntos de cada operación y su movimiento firmado— y finaliza con `ROLLBACK`.
+No debe ejecutarse contra el proyecto remoto sin una autorización separada.
 
 La descripcion completa del contrato, riesgos, reversibilidad y gates se
 encuentra en [docs/database/baseline.md](../docs/database/baseline.md). El

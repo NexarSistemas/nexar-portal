@@ -78,6 +78,9 @@ create table public.fidelizacion_operations (
   account_id uuid not null,
   tipo text not null,
   puntos bigint not null,
+  puntos_movimiento bigint generated always as (
+    case when tipo = 'earn' then puntos else -puntos end
+  ) stored not null,
   reward_id uuid,
   estado text not null,
   expires_at timestamptz,
@@ -105,8 +108,8 @@ create table public.fidelizacion_operations (
   constraint fidelizacion_operations_tenant_idempotency_key_key
     unique (tenant_id, idempotency_key),
   constraint fidelizacion_operations_tenant_id_id_key unique (tenant_id, id),
-  constraint fidelizacion_operations_tenant_id_account_tipo_key
-    unique (tenant_id, id, account_id, tipo),
+  constraint fidelizacion_operations_tenant_id_account_tipo_puntos_key
+    unique (tenant_id, id, account_id, tipo, puntos_movimiento),
   constraint fidelizacion_operations_tenant_id_account_reward_key
     unique (tenant_id, id, account_id, reward_id)
 );
@@ -121,8 +124,9 @@ create table public.fidelizacion_point_movements (
   fecha timestamptz not null default now(),
   operation_id uuid not null,
   constraint fidelizacion_point_movements_operation_fkey
-    foreign key (tenant_id, operation_id, account_id, tipo)
-    references public.fidelizacion_operations (tenant_id, id, account_id, tipo)
+    foreign key (tenant_id, operation_id, account_id, tipo, puntos)
+    references public.fidelizacion_operations
+      (tenant_id, id, account_id, tipo, puntos_movimiento)
     on delete restrict,
   constraint fidelizacion_point_movements_tipo_check check (tipo in ('earn', 'redeem')),
   constraint fidelizacion_point_movements_puntos_check
@@ -315,6 +319,8 @@ using (
 
 comment on table public.fidelizacion_point_movements is
   'Libro mayor y fuente de verdad del saldo de puntos; no mantener un saldo mutable paralelo.';
+comment on column public.fidelizacion_operations.puntos_movimiento is
+  'Impacto firmado de la operacion, usado por la FK del movimiento para garantizar la cantidad exacta de puntos.';
 comment on column public.fidelizacion_tenants.public_qr_code is
   'Localizador publico opaco de 192 bits aleatorios, codificado como base64url sin padding; no es una credencial.';
 comment on schema app_private is
