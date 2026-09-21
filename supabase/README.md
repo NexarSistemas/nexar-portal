@@ -24,6 +24,7 @@ proyecto enlazado ni comandos de despliegue de base de datos.
 | M06.6 | Revoca la ejecución pública del RPC legacy `portal_dashboard_vendedor(text)` ya no consumido por runtime. | Hardening acotado; reversible |
 | Fidelización Fase 1 | Crea el esquema multi-tenant del MVP, integridad cruzada, grants mínimos y RLS de solo lectura para clientes y staff. | Aditiva; requiere prueba local de autorización |
 | Fidelización Fase 2 | Agrega RPC para crear, resolver por QR y confirmar acreditaciones `earn` con autorización, atomicidad e idempotencia. | Aditiva; requiere prueba local transaccional |
+| Fidelización Fase 3 | Agrega RPC para intención, escaneo, confirmación y cancelación de canjes `redeem`, con costo congelado y saldo derivado. | Aditiva; requiere prueba local transaccional y de concurrencia |
 | M07 | Retira Auth legacy solo despues del gate operativo. | Parcialmente destructiva y bloqueada |
 
 `precios_planes`, las tablas legacy, `admin_audit_log` y la autenticacion propia
@@ -40,6 +41,12 @@ autorizada, aislamiento, QR sin efectos, cliente correcto, expiración,
 idempotencia, doble confirmación, concurrencia estructural, atomicidad ante un
 fallo controlado y saldo derivado. También finaliza con `ROLLBACK` y conserva
 el mismo límite de ejecución exclusivamente local y autorizada.
+
+La prueba `supabase/tests/fidelizacion_fase3_canje.sql` cubre intención desde
+recompensa activa, QR como localizador sin débito, autorización de staff,
+congelamiento del costo, idempotencia, saldo insuficiente, cancelación y el
+caso de dos canjes contra la misma cuenta. Finaliza con `ROLLBACK`; la
+serialización se implementa bloqueando la cuenta antes de recalcular el saldo.
 
 La descripcion completa del contrato, riesgos, reversibilidad y gates se
 encuentra en [docs/database/baseline.md](../docs/database/baseline.md). El
