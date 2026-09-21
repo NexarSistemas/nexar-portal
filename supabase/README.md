@@ -23,6 +23,7 @@ proyecto enlazado ni comandos de despliegue de base de datos.
 | M06.5 | Prepara Auth+RLS transicional para vendedores, licencias y comisiones legacy. | Aditiva; coexistencia legacy |
 | M06.6 | Revoca la ejecución pública del RPC legacy `portal_dashboard_vendedor(text)` ya no consumido por runtime. | Hardening acotado; reversible |
 | Fidelización Fase 1 | Crea el esquema multi-tenant del MVP, integridad cruzada, grants mínimos y RLS de solo lectura para clientes y staff. | Aditiva; requiere prueba local de autorización |
+| Fidelización Fase 2 | Agrega RPC para crear, resolver por QR y confirmar acreditaciones `earn` con autorización, atomicidad e idempotencia. | Aditiva; requiere prueba local transaccional |
 | M07 | Retira Auth legacy solo despues del gate operativo. | Parcialmente destructiva y bloqueada |
 
 `precios_planes`, las tablas legacy, `admin_audit_log` y la autenticacion propia
@@ -33,6 +34,12 @@ La prueba transaccional `supabase/tests/fidelizacion_fase1_rls.sql` usa fixtures
 sintéticos, valida aislamiento e integridad —incluida la igualdad entre los
 puntos de cada operación y su movimiento firmado— y finaliza con `ROLLBACK`.
 No debe ejecutarse contra el proyecto remoto sin una autorización separada.
+
+La prueba `supabase/tests/fidelizacion_fase2_acreditacion.sql` valida creación
+autorizada, aislamiento, QR sin efectos, cliente correcto, expiración,
+idempotencia, doble confirmación, concurrencia estructural, atomicidad ante un
+fallo controlado y saldo derivado. También finaliza con `ROLLBACK` y conserva
+el mismo límite de ejecución exclusivamente local y autorizada.
 
 La descripcion completa del contrato, riesgos, reversibilidad y gates se
 encuentra en [docs/database/baseline.md](../docs/database/baseline.md). El

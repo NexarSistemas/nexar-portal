@@ -133,6 +133,31 @@ sesiones, recuperacion propia y las columnas `password_hash`,
 `password_change_required` y `ultimo_login`; `vendedores.es_admin` se conserva
 por ahora. El baseline no elimina esas estructuras de manera anticipada.
 
+## Fidelización Fase 2: acreditación de puntos
+
+La migración incremental de Fase 2 agrega tres RPC públicas `SECURITY INVOKER`
+que delegan en tres funciones `SECURITY DEFINER` dentro de `app_private`.
+Todas fijan `search_path` vacío y su ejecución queda restringida a
+`authenticated`:
+
+- `fidelizacion_crear_earn` deriva el tenant desde la cuenta y exige staff
+  activo `admin` u `operador` del mismo tenant. La unicidad
+  `(tenant_id, idempotency_key)` devuelve la misma operación ante reintentos
+  equivalentes y rechaza la reutilización con otros datos.
+- `fidelizacion_obtener_earn_pendientes` usa el QR opaco para localizar el
+  tenant y devuelve únicamente pendientes vigentes de la cuenta autenticada.
+  Es de solo lectura: escanear nunca crea ni confirma movimientos.
+- `fidelizacion_confirmar_earn` deriva la cuenta desde `auth.uid()`, valida
+  QR, tenant, cuenta, tipo, estado y expiración, bloquea la operación con
+  `FOR UPDATE` y crea el movimiento positivo junto con el estado
+  `confirmed` en una sola transacción.
+
+La FK compuesta entre operación y movimiento conserva la igualdad de tenant,
+cuenta, tipo y puntos. `UNIQUE (operation_id)` impide un segundo movimiento
+incluso ante solicitudes concurrentes. El saldo continúa derivándose como
+`SUM(fidelizacion_point_movements.puntos)`; no se agrega saldo mutable ni se
+modifica `public.perfiles`.
+
 ## Validacion y reversibilidad
 
 Las consultas en `supabase/validation/m00.sql` a `m07.sql`, incluida `m06_6.sql`, son de lectura y se
