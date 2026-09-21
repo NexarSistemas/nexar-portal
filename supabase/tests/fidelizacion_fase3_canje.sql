@@ -27,7 +27,8 @@ insert into public.fidelizacion_rewards (id, tenant_id, nombre, puntos_requerido
   ('31100000-0000-4000-8000-000000000003', '11100000-0000-4000-8000-000000000001', 'Reward inactiva', 10, false),
   ('31100000-0000-4000-8000-000000000004', '11100000-0000-4000-8000-000000000002', 'Reward otro tenant', 10, true),
   ('31100000-0000-4000-8000-000000000005', '11100000-0000-4000-8000-000000000001', 'Reward costosa', 70, true),
-  ('31100000-0000-4000-8000-000000000006', '11100000-0000-4000-8000-000000000001', 'Reward concurrente', 60, true);
+  ('31100000-0000-4000-8000-000000000006', '11100000-0000-4000-8000-000000000001', 'Reward concurrente', 60, true),
+  ('31100000-0000-4000-8000-000000000007', '11100000-0000-4000-8000-000000000001', 'Reward idempotente', 30, true);
 
 -- Saldo inicial de 100 para ambos clientes, derivado exclusivamente del ledger.
 insert into public.fidelizacion_operations (id, tenant_id, account_id, tipo, puntos, estado, confirmed_at, idempotency_key) values
@@ -93,6 +94,40 @@ begin
   end if;
 end $$;
 
+-- Un reintento idempotente no depende de que la recompensa siga activa.
+select set_config('request.jwt.claims', '{"sub":"01100000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+set local role authenticated;
+select operation_id from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000007', 'fase3-recompensa-desactivada', null);
+reset role;
+update public.fidelizacion_rewards set activa = false where id = '31100000-0000-4000-8000-000000000007';
+select set_config('request.jwt.claims', '{"sub":"01100000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare
+  v_operacion_original uuid;
+  v_operacion_reintentada uuid;
+begin
+  select id into v_operacion_original
+  from public.fidelizacion_operations
+  where idempotency_key = 'fase3-recompensa-desactivada';
+  select operation_id into v_operacion_reintentada
+  from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000007', 'fase3-recompensa-desactivada', null);
+  if v_operacion_reintentada is distinct from v_operacion_original then
+    raise exception 'El reintento no devolvio la operacion original.';
+  end if;
+  begin
+    perform * from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000007', 'fase3-recompensa-inactiva-nueva', null);
+    raise exception 'Una recompensa desactivada creo una operacion nueva.';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+do $$
+begin
+  if (select count(*) from public.fidelizacion_operations where idempotency_key = 'fase3-recompensa-desactivada' and puntos = 30) <> 1 then
+    raise exception 'El reintento con recompensa desactivada no devolvio la operacion original.';
+  end if;
+end $$;
+
 -- El QR correcto solo avanza el estado; QR ajeno y expiracion se rechazan.
 select set_config('request.jwt.claims', '{"sub":"01100000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 set local role authenticated;
@@ -119,7 +154,7 @@ do $$ begin
 end $$;
 reset role;
 
-insert into public.fidelizacion_operations (id, tenant_id, account_id, tipo, puntos, reward_id, estado, expires_at, idempotency_key) values
+insert into public.fidelizacion_operations (id, tenant_id, account_id, tipo, puntos, reward_id, estado, expires_at, created_at, idempotency_key) values
   ('41100000-0000-4000-8000-000000000003', '11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000001', 'redeem', 40, '31100000-0000-4000-8000-000000000002', 'pending_customer', now() - interval '1 hour', now() - interval '2 hours', 'fase3-expirada');
 select set_config('request.jwt.claims', '{"sub":"01100000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 set local role authenticated;

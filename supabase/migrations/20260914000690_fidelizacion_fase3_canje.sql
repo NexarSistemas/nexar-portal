@@ -134,11 +134,11 @@ begin
     raise exception using errcode = '22023', message = 'La expiracion debe ser futura.';
   end if;
 
-  select r.tenant_id, r.puntos_requeridos
-    into v_tenant_id, v_puntos
+  select r.tenant_id
+    into v_tenant_id
   from public.fidelizacion_rewards r
   join public.fidelizacion_tenants t on t.id = r.tenant_id and t.activo
-  where r.id = p_reward_id and r.activa
+  where r.id = p_reward_id
   for share of r, t;
 
   if v_tenant_id is null then
@@ -170,6 +170,15 @@ begin
     return query select v_operacion.id, v_operacion.puntos, v_operacion.estado,
       v_operacion.expires_at, v_operacion.created_at;
     return;
+  end if;
+
+  select r.puntos_requeridos into v_puntos
+  from public.fidelizacion_rewards r
+  where r.id = p_reward_id and r.tenant_id = v_tenant_id and r.activa
+  for share;
+  if v_puntos is null then
+    raise exception using
+      errcode = '42501', message = 'La recompensa no esta activa para crear un canje.';
   end if;
 
   insert into public.fidelizacion_operations (
