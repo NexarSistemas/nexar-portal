@@ -159,6 +159,35 @@ incluso ante solicitudes concurrentes. El saldo continúa derivándose como
 `SUM(fidelizacion_point_movements.puntos)`; no se agrega saldo mutable ni se
 modifica `public.perfiles`.
 
+## Fidelización Fase 3: canje de recompensas
+
+La migración `20260914000690_fidelizacion_fase3_canje.sql` se ubica después de
+Fase 2 y antes de M07. Expone cuatro RPC públicas mínimas: crear la intención
+`redeem`, escanear el QR, confirmar por staff y cancelar. Cada RPC deriva la
+identidad de `auth.uid()` y delega la validación sensible a `app_private`; los
+helpers no son ejecutables directamente por `authenticated`.
+
+La creación resuelve primero el tenant de una recompensa activa y luego exige
+una cuenta activa del cliente dentro de ese tenant; copia `puntos_requeridos` a
+la operación. El QR sigue siendo solo un
+localizador opaco: el escaneo valida tenant, cuenta, estado y expiración, y
+solo cambia `pending_customer` a `pending_staff`; no crea movimientos.
+
+La confirmación requiere staff activo `admin` u `operador` del tenant. Bloquea
+primero la fila de cuenta y luego la operación antes de sumar el ledger, por lo que dos
+canjes distintos de una misma cuenta se serializan y nunca pueden confirmar un
+saldo negativo. En una misma transacción crea la redención, el movimiento
+negativo y el estado `confirmed`. Constraints compuestos y un constraint trigger
+diferido exigen que un `redeem` confirmado tenga ambos artefactos coherentes
+con tenant, cuenta, recompensa y costo congelado. Una confirmación repetida es
+idempotente; un canje confirmado no se cancela ni se reutiliza.
+
+La cancelación no genera redención ni movimientos: el cliente puede cancelar
+antes del escaneo y el staff autorizado después del escaneo. Las operaciones
+expiradas se rechazan. La suite Fase 3 y su validación de solo lectura son
+locales y terminan sin persistir datos; no sustituyen los gates de despliegue ni
+autorizan SQL remoto.
+
 ## Validacion y reversibilidad
 
 Las consultas en `supabase/validation/m00.sql` a `m07.sql`, incluida `m06_6.sql`, son de lectura y se
