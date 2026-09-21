@@ -15,7 +15,8 @@ insert into public.fidelizacion_tenants (id, slug, nombre, public_qr_code) value
 
 insert into public.fidelizacion_accounts (id, tenant_id, user_id) values
   ('21100000-0000-4000-8000-000000000001', '11100000-0000-4000-8000-000000000001', '01100000-0000-4000-8000-000000000001'),
-  ('21100000-0000-4000-8000-000000000002', '11100000-0000-4000-8000-000000000001', '01100000-0000-4000-8000-000000000002');
+  ('21100000-0000-4000-8000-000000000002', '11100000-0000-4000-8000-000000000001', '01100000-0000-4000-8000-000000000002'),
+  ('21100000-0000-4000-8000-000000000003', '11100000-0000-4000-8000-000000000002', '01100000-0000-4000-8000-000000000001');
 
 insert into public.fidelizacion_staff (tenant_id, user_id, rol) values
   ('11100000-0000-4000-8000-000000000001', '01100000-0000-4000-8000-000000000003', 'operador'),
@@ -41,19 +42,44 @@ select set_config('request.jwt.claims', '{"sub":"01100000-0000-4000-8000-0000000
 set local role authenticated;
 select operation_id from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000002', 'fase3-redeem-a', null);
 select operation_id from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000002', 'fase3-redeem-a', null);
+select operation_id from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000004', 'fase3-redeem-b', null);
 
 do $$
 begin
-  begin
-    perform * from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000004', 'fase3-otro-tenant', null);
-    raise exception 'Una recompensa de otro tenant fue aceptada.';
-  exception when insufficient_privilege then null; end;
   begin
     perform * from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000003', 'fase3-inactiva', null);
     raise exception 'Una recompensa inactiva fue aceptada.';
   exception when insufficient_privilege then null; end;
 end $$;
 reset role;
+
+select set_config('request.jwt.claims', '{"sub":"01100000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    perform * from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000004', 'fase3-otro-tenant', null);
+    raise exception 'Una recompensa sin cuenta activa en su tenant fue aceptada.';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+
+do $$
+begin
+  if not exists (
+    select 1 from public.fidelizacion_operations
+    where idempotency_key = 'fase3-redeem-a'
+      and tenant_id = '11100000-0000-4000-8000-000000000001'
+      and account_id = '21100000-0000-4000-8000-000000000001'
+  ) or not exists (
+    select 1 from public.fidelizacion_operations
+    where idempotency_key = 'fase3-redeem-b'
+      and tenant_id = '11100000-0000-4000-8000-000000000002'
+      and account_id = '21100000-0000-4000-8000-000000000003'
+  ) then
+    raise exception 'La recompensa no resolvio la cuenta activa del tenant correcto.';
+  end if;
+end $$;
 
 update public.fidelizacion_rewards set puntos_requeridos = 45 where id = '31100000-0000-4000-8000-000000000002';
 select set_config('request.jwt.claims', '{"sub":"01100000-0000-4000-8000-000000000001","role":"authenticated"}', true);
@@ -94,7 +120,7 @@ end $$;
 reset role;
 
 insert into public.fidelizacion_operations (id, tenant_id, account_id, tipo, puntos, reward_id, estado, expires_at, idempotency_key) values
-  ('41100000-0000-4000-8000-000000000003', '11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000001', 'redeem', 40, '31100000-0000-4000-8000-000000000002', 'pending_customer', now() - interval '1 hour', 'fase3-expirada');
+  ('41100000-0000-4000-8000-000000000003', '11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000001', 'redeem', 40, '31100000-0000-4000-8000-000000000002', 'pending_customer', now() - interval '1 hour', now() - interval '2 hours', 'fase3-expirada');
 select set_config('request.jwt.claims', '{"sub":"01100000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 set local role authenticated;
 do $$ begin
@@ -239,12 +265,16 @@ reset role;
 
 -- La prueba estructural cubre la serializacion de llamadas concurrentes reales por cuenta.
 do $$
-declare v_definicion text;
+declare
+  v_definicion text;
+  v_cuenta_lock integer;
 begin
   select pg_catalog.lower(pg_get_functiondef('app_private.fidelizacion_confirmar_redeem(uuid)'::regprocedure)) into v_definicion;
-  if pg_catalog.position('for update' in v_definicion) = 0
-    or pg_catalog.position('sum(m.puntos)' in v_definicion) < pg_catalog.position('for update' in v_definicion) then
-    raise exception 'La confirmacion no bloquea antes de recalcular el saldo.';
+  v_cuenta_lock := pg_catalog.position('perform 1 from public.fidelizacion_accounts' in v_definicion);
+  if v_cuenta_lock = 0
+    or pg_catalog.position('where o.id = p_operation_id and o.tipo = ''redeem''' in pg_catalog.substr(v_definicion, v_cuenta_lock)) = 0
+    or pg_catalog.position('sum(m.puntos)' in v_definicion) < v_cuenta_lock then
+    raise exception 'La confirmacion no conserva el orden cuenta-operacion antes de recalcular el saldo.';
   end if;
 end $$;
 

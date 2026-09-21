@@ -50,6 +50,11 @@ order by p.proname;
 
 select
   pg_catalog.position('fidelizacion_rewards' in definicion) > 0 as valida_recompensa_activa,
+  pg_catalog.position('from public.fidelizacion_rewards r' in definicion)
+    < pg_catalog.position('from public.fidelizacion_accounts a' in definicion)
+    as recompensa_resuelve_tenant_antes_de_cuenta,
+  pg_catalog.position('a.tenant_id = v_tenant_id' in definicion) > 0
+    as cuenta_resuelta_en_tenant_de_recompensa,
   pg_catalog.position('puntos_requeridos' in definicion) > 0 as congela_costo,
   pg_catalog.position('on conflict on constraint fidelizacion_operations_tenant_idempotency_key_key' in definicion) > 0 as idempotencia_por_constraint,
   pg_catalog.position('pending_customer' in definicion) > 0 as crea_pending_customer
@@ -68,8 +73,12 @@ from (
 
 select
   pg_catalog.position('fidelizacion_staff' in definicion) > 0 as valida_staff,
-  pg_catalog.position('for update' in definicion) > 0 as bloquea_operacion,
-  pg_catalog.position('for update;' in definicion) > 0 as bloquea_cuenta,
+  pg_catalog.position('perform 1 from public.fidelizacion_accounts' in definicion) > 0 as bloquea_cuenta,
+  pg_catalog.position('where o.id = p_operation_id and o.tipo = ''redeem''' in definicion) > 0 as bloquea_operacion,
+  pg_catalog.position('where o.id = p_operation_id and o.tipo = ''redeem''' in
+    pg_catalog.substr(definicion,
+      pg_catalog.position('perform 1 from public.fidelizacion_accounts' in definicion))) > 0
+    as orden_cuenta_antes_operacion,
   pg_catalog.position('sum(m.puntos)' in definicion) > 0 as saldo_derivado_bajo_lock,
   pg_catalog.position('fidelizacion_redemptions' in definicion) > 0 as crea_redencion,
   pg_catalog.position('fidelizacion_point_movements' in definicion) > 0 as crea_movimiento_negativo

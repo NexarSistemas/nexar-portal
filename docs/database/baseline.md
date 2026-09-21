@@ -167,13 +167,14 @@ Fase 2 y antes de M07. Expone cuatro RPC públicas mínimas: crear la intención
 identidad de `auth.uid()` y delega la validación sensible a `app_private`; los
 helpers no son ejecutables directamente por `authenticated`.
 
-La creación exige una cuenta activa y una recompensa activa del mismo tenant,
-y copia `puntos_requeridos` a la operación. El QR sigue siendo solo un
+La creación resuelve primero el tenant de una recompensa activa y luego exige
+una cuenta activa del cliente dentro de ese tenant; copia `puntos_requeridos` a
+la operación. El QR sigue siendo solo un
 localizador opaco: el escaneo valida tenant, cuenta, estado y expiración, y
 solo cambia `pending_customer` a `pending_staff`; no crea movimientos.
 
 La confirmación requiere staff activo `admin` u `operador` del tenant. Bloquea
-la operación y luego la fila de cuenta antes de sumar el ledger, por lo que dos
+primero la fila de cuenta y luego la operación antes de sumar el ledger, por lo que dos
 canjes distintos de una misma cuenta se serializan y nunca pueden confirmar un
 saldo negativo. En una misma transacción crea la redención, el movimiento
 negativo y el estado `confirmed`. Constraints compuestos y un constraint trigger
