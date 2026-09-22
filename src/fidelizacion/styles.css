@@ -1,0 +1,167 @@
+:root{
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:#183047;
+  background:#f4f7f9;
+  font-synthesis:none;
+  text-rendering:optimizeLegibility;
+  --fidelity-navy:#102d4a;
+  --fidelity-blue:#2865a5;
+  --fidelity-green:#159b67;
+  --fidelity-green-dark:#0c704a;
+  --fidelity-red:#a14242;
+  --fidelity-muted:#647585;
+  --fidelity-line:#dfe7ed;
+  --fidelity-surface:#fff
+}
+*{box-sizing:border-box}
+body{margin:0;min-width:320px;min-height:100vh}
+button,input{font:inherit}
+.fidelity-button{
+  min-height:42px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:0;
+  border-radius:8px;
+  padding:0 16px;
+  font-weight:700;
+  text-decoration:none;
+  cursor:pointer
+}
+.fidelity-button:disabled{opacity:.58;cursor:wait}
+.fidelity-button-primary{background:var(--fidelity-navy);color:#fff}
+.fidelity-button-primary:hover:not(:disabled){background:#1b466e}
+.fidelity-button-quiet{background:#edf2f5;color:#435b6e}
+.fidelity-button-danger{background:#fff0f0;color:var(--fidelity-red);border:1px solid #efd1d1}
+.fidelity-loading,.fidelity-centered{min-height:100vh;display:grid;place-items:center;padding:24px}
+.fidelity-loading{color:var(--fidelity-muted)}
+.fidelity-message-card{
+  width:min(480px,100%);
+  padding:36px;
+  border:1px solid var(--fidelity-line);
+  border-radius:14px;
+  background:var(--fidelity-surface);
+  text-align:center;
+  box-shadow:0 16px 50px #102d4a12
+}
+.fidelity-message-card h1{margin:6px 0 10px;color:var(--fidelity-navy)}
+.fidelity-auth-layout{min-height:100vh;display:grid;grid-template-columns:minmax(360px,1fr) minmax(320px,1fr);background:#fff}
+.fidelity-auth-card{width:min(420px,calc(100% - 48px));margin:auto;padding:54px 0}
+.fidelity-logo{display:block;width:152px;height:auto}
+.fidelity-eyebrow,.fidelity-step{
+  margin:0 0 9px;
+  color:var(--fidelity-green-dark);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase
+}
+.fidelity-auth-card .fidelity-eyebrow{margin-top:48px}
+.fidelity-auth-card h1,.fidelity-intro h1{margin:0;color:var(--fidelity-navy);letter-spacing:-.035em}
+.fidelity-auth-card h1{font-size:35px}
+.fidelity-muted{color:var(--fidelity-muted);line-height:1.55}
+.fidelity-auth-card form,.fidelity-stack-form{display:grid;gap:10px;margin-top:30px}
+.fidelity-auth-card label,.fidelity-stack-form label{font-size:13px;font-weight:700;margin-top:7px}
+.fidelity-auth-card input,.fidelity-stack-form input,.fidelity-inline-form input{
+  width:100%;
+  min-height:46px;
+  padding:0 13px;
+  border:1px solid #cbd7df;
+  border-radius:8px;
+  color:var(--fidelity-navy);
+  outline:none
+}
+.fidelity-auth-card input:focus,.fidelity-stack-form input:focus,.fidelity-inline-form input:focus{
+  border-color:var(--fidelity-blue);
+  box-shadow:0 0 0 3px #2865a51c
+}
+.fidelity-status{margin:4px 0 0;color:var(--fidelity-red);font-size:13px;line-height:1.5}
+.fidelity-auth-aside{
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-end;
+  padding:64px;
+  color:#fff;
+  background:radial-gradient(circle at 28% 24%,#ffffff1e 0 3%,transparent 28%),linear-gradient(145deg,#102d4a,#16496f 66%,#16915f)
+}
+.fidelity-auth-aside span{font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:#bfe6d4}
+.fidelity-auth-aside p{max-width:480px;margin:14px 0 0;font-size:31px;line-height:1.35}
+.fidelity-header{
+  min-height:76px;
+  padding:12px max(24px,calc((100% - 1180px)/2));
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--fidelity-line);
+  background:#fff
+}
+.fidelity-brand{display:flex;align-items:center;gap:15px;color:var(--fidelity-navy);font-weight:800}
+.fidelity-brand img{width:112px;height:auto}
+.fidelity-brand span{padding-left:15px;border-left:1px solid var(--fidelity-line)}
+.fidelity-session{display:flex;align-items:center;gap:10px;font-size:13px}
+.fidelity-role{padding:5px 9px;border-radius:20px;background:#e8f6ef;color:var(--fidelity-green-dark);font-size:11px;font-weight:800}
+.fidelity-main{width:min(1180px,calc(100% - 48px));margin:0 auto;padding:46px 0 54px}
+.fidelity-intro{margin-bottom:28px}
+.fidelity-intro h1{font-size:32px}
+.fidelity-intro .fidelity-muted{max-width:690px;margin-bottom:0}
+.fidelity-card{padding:24px;border:1px solid var(--fidelity-line);border-radius:13px;background:#fff;box-shadow:0 8px 26px #102d4a08}
+.fidelity-card h2{margin:0;color:var(--fidelity-navy);font-size:20px}
+.fidelity-search-card{display:grid;grid-template-columns:220px 1fr;align-items:end;gap:28px}
+.fidelity-inline-form{display:grid;grid-template-columns:1fr auto;gap:10px}
+.fidelity-notice{padding:13px 16px;border-radius:9px;font-size:14px;font-weight:650}
+.fidelity-notice-success{background:#e8f6ef;color:#126a49;border:1px solid #bfe5d2}
+.fidelity-notice-error{background:#fff0f0;color:#8d3838;border:1px solid #efd1d1}
+.fidelity-empty{margin-top:20px;padding:34px;border:1px dashed #cbd7df;border-radius:13px;text-align:center;color:var(--fidelity-muted)}
+.fidelity-empty h2{margin:0 0 6px;color:var(--fidelity-navy);font-size:18px}
+.fidelity-empty p{margin:0}
+.fidelity-account{margin-top:20px}
+.fidelity-balance-card{display:flex;justify-content:space-between;align-items:center;gap:24px}
+.fidelity-balance{display:flex;flex-direction:column;align-items:flex-end}
+.fidelity-balance strong{color:var(--fidelity-green-dark);font-size:35px;line-height:1}
+.fidelity-balance span{margin-top:6px;color:var(--fidelity-muted);font-size:12px}
+.fidelity-columns{display:grid;grid-template-columns:minmax(270px,.72fr) minmax(440px,1.28fr);gap:20px;margin-top:20px}
+.fidelity-section-heading{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.fidelity-operation-list{display:grid;gap:10px;margin-top:20px}
+.fidelity-operation{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px;border:1px solid var(--fidelity-line);border-radius:10px}
+.fidelity-operation h3{margin:7px 0 4px;font-size:15px;color:var(--fidelity-navy)}
+.fidelity-operation p{margin:0;color:var(--fidelity-muted);font-size:12px}
+.fidelity-badge{display:inline-block;padding:4px 8px;border-radius:20px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.fidelity-badge-warning{background:#fff4d9;color:#8a6415}
+.fidelity-badge-info{background:#e7f0f8;color:#285e87}
+.fidelity-badge-muted{background:#edf1f4;color:#637381}
+.fidelity-operation-actions{display:flex;gap:8px;flex-shrink:0}
+.fidelity-operation-actions .fidelity-button{min-height:36px;padding:0 12px;font-size:12px}
+.fidelity-empty-inline{margin:22px 0 2px;padding:22px;border-radius:9px;background:#f5f7f9;color:var(--fidelity-muted);font-size:13px;text-align:center}
+.fidelity-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:760px){
+  .fidelity-auth-layout{grid-template-columns:1fr}
+  .fidelity-auth-aside{display:none}
+  .fidelity-auth-card{padding:38px 0}
+  .fidelity-header{align-items:flex-start;padding:16px 18px}
+  .fidelity-brand{display:block}
+  .fidelity-brand img{width:104px}
+  .fidelity-brand span{display:block;margin-top:6px;padding:0;border:0;font-size:12px}
+  .fidelity-session{justify-content:flex-end;flex-wrap:wrap;gap:6px}
+  .fidelity-session>span:first-child{width:100%;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+  .fidelity-role{display:none}
+  .fidelity-session .fidelity-button{min-height:34px;padding:0 10px;font-size:11px}
+  .fidelity-main{width:min(100% - 32px,1180px);padding:30px 0 38px}
+  .fidelity-intro h1{font-size:27px}
+  .fidelity-card{padding:19px}
+  .fidelity-search-card{grid-template-columns:1fr;gap:14px}
+  .fidelity-inline-form{grid-template-columns:1fr}
+  .fidelity-balance-card{align-items:flex-start;flex-direction:column}
+  .fidelity-balance{align-items:flex-start}
+  .fidelity-columns{grid-template-columns:1fr}
+  .fidelity-operation{align-items:flex-start;flex-direction:column}
+  .fidelity-operation-actions{width:100%}
+  .fidelity-operation-actions .fidelity-button{flex:1}
+}
+@media(max-width:380px){
+  .fidelity-main{width:calc(100% - 24px)}
+  .fidelity-header{padding:14px 12px}
+  .fidelity-session>span:first-child{max-width:130px}
+  .fidelity-card{padding:16px}
+  .fidelity-operation-actions{flex-direction:column}
+}

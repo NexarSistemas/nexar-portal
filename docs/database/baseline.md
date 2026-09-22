@@ -188,6 +188,23 @@ expiradas se rechazan. La suite Fase 3 y su validación de solo lectura son
 locales y terminan sin persistir datos; no sustituyen los gates de despliegue ni
 autorizan SQL remoto.
 
+## Fidelización Fase 4: lectura mínima para el panel operador
+
+La migración `20260914000695_fidelizacion_fase4_panel_operador.sql` se ubica
+después de Fase 3 y antes de M07. Expone
+`fidelizacion_buscar_cuenta_staff(text)`: busca por email exacto normalizado una
+cuenta activa del único tenant activo autorizado al staff autenticado y devuelve
+solo `account_id`, `cliente_email` y el saldo derivado del ledger.
+
+La implementación pública `SECURITY INVOKER` delega en un helper
+`SECURITY DEFINER` de `app_private`, ambos con `search_path` vacío y ejecución
+restringida a `authenticated`. El helper deriva identidad con `auth.uid()`,
+acepta únicamente staff activo `admin` u `operador`, consulta `auth.users` sin
+conceder acceso directo al frontend y no usa `public.perfiles` ni tablas legacy
+de clientes. El email de otro tenant y el inexistente producen el mismo resultado
+vacío. El saldo usa `COALESCE(SUM(fidelizacion_point_movements.puntos), 0)` y no
+crea estado mutable paralelo.
+
 ## Validacion y reversibilidad
 
 Las consultas en `supabase/validation/m00.sql` a `m07.sql`, incluida `m06_6.sql`, son de lectura y se
