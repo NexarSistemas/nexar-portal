@@ -16,12 +16,13 @@ import {
   panelStateText,
   UnauthorizedStaffError,
 } from './contracts.js';
+import { createEarnAttemptStore, earnFlowNotice, runEarnCreation } from './earn-flow.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
 let client;
 const lock = createActionLock();
-let earnAttempt = null;
+const earnAttempts = createEarnAttemptStore(() => crypto.randomUUID());
 const state = {
   access: null,
   account: null,
@@ -194,7 +195,7 @@ async function handleSearch(event) {
       state.operations = state.account
         ? await listPendingOperations(client, state.account.account_id)
         : [];
-      earnAttempt = null;
+      earnAttempts.clear();
     } catch (error) {
       state.account = null;
       state.operations = [];
@@ -214,22 +215,24 @@ async function handleEarn(event) {
     return renderPanel();
   }
   const signature = `${state.account.account_id}:${points}`;
-  if (!earnAttempt || earnAttempt.signature !== signature) {
-    earnAttempt = { signature, key: crypto.randomUUID() };
-  }
+  const attempt = earnAttempts.get(signature);
   await lock.run(async () => {
     state.loading = true;
     state.notice = null;
     renderPanel();
     try {
-      await createEarn(client, {
-        accountId: state.account.account_id,
-        points,
-        idempotencyKey: earnAttempt.key,
+      const result = await runEarnCreation({
+        create: () => createEarn(client, {
+          accountId: state.account.account_id,
+          points,
+          idempotencyKey: attempt.key,
+        }),
+        refresh: refreshData,
       });
-      earnAttempt = null;
-      state.notice = { type: 'success', message: 'Acreditación creada. Está pendiente de confirmación del cliente.' };
-      await refreshData();
+      if (result.created && result.refreshed) {
+        earnAttempts.clear();
+      }
+      state.notice = earnFlowNotice(result);
     } catch (error) {
       state.notice = { type: 'error', message: error.message };
     } finally {
@@ -269,6 +272,7 @@ async function refreshAccount() {
     renderPanel();
     try {
       await refreshData();
+      earnAttempts.clear();
     } catch (error) {
       state.notice = { type: 'error', message: error.message };
     } finally {

@@ -17,6 +17,7 @@ import {
   parseStaffAccess,
   UnauthorizedStaffError,
 } from '../src/fidelizacion/contracts.js';
+import { createEarnAttemptStore, earnFlowNotice, runEarnCreation } from '../src/fidelizacion/earn-flow.js';
 
 test('normaliza el email y acepta exclusivamente un staff activo de Fidelización', () => {
   assert.equal(normalizeEmail('  Operador@Ejemplo.COM '), 'operador@ejemplo.com');
@@ -103,6 +104,54 @@ test('earn conserva el contrato e idempotency_key de Fase 2', async () => {
     p_account_id: 'account-id', p_puntos: 180, p_idempotency_key: 'attempt-id', p_expires_at: null,
   } });
   assert.equal(result.estado, 'pending_customer');
+});
+
+test('conserva la idempotency key si createEarn tuvo éxito pero falla el refresh', async () => {
+  const keys = ['attempt-1', 'attempt-2'];
+  const attempts = createEarnAttemptStore(() => keys.shift());
+  const signature = 'account-id:180';
+  const firstAttempt = attempts.get(signature);
+  const calls = [];
+
+  const firstResult = await runEarnCreation({
+    create: async () => { calls.push(firstAttempt.key); },
+    refresh: async () => { throw new Error('lectura temporalmente no disponible'); },
+  });
+
+  assert.deepEqual(firstResult, {
+    created: true,
+    refreshed: false,
+    error: new Error('lectura temporalmente no disponible'),
+  });
+  assert.equal(attempts.get(signature).key, 'attempt-1');
+
+  const retryAttempt = attempts.get(signature);
+  const retryResult = await runEarnCreation({
+    create: async () => { calls.push(retryAttempt.key); },
+    refresh: async () => {},
+  });
+  assert.deepEqual(retryResult, { created: true, refreshed: true });
+  assert.deepEqual(calls, ['attempt-1', 'attempt-1']);
+  assert.match(earnFlowNotice(firstResult).message, /fue creada, pero no se pudo actualizar la vista/i);
+  attempts.clear();
+  assert.equal(attempts.get(signature).key, 'attempt-2');
+});
+
+test('distingue una creación fallida de una creación exitosa con refresh fallido', async () => {
+  const creationFailure = await runEarnCreation({
+    create: async () => { throw new Error('no creada'); },
+    refresh: async () => { throw new Error('no debe ejecutarse'); },
+  });
+  assert.equal(creationFailure.created, false);
+  assert.deepEqual(earnFlowNotice(creationFailure), { type: 'error', message: 'no creada' });
+
+  const refreshFailure = await runEarnCreation({
+    create: async () => {},
+    refresh: async () => { throw new Error('vista no actualizada'); },
+  });
+  assert.equal(refreshFailure.created, true);
+  assert.equal(refreshFailure.refreshed, false);
+  assert.equal(earnFlowNotice(refreshFailure).type, 'success');
 });
 
 test('las operaciones pendientes se limitan a la cuenta resuelta y a estados permitidos', async () => {
