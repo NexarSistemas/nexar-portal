@@ -17,7 +17,12 @@ import {
   parseStaffAccess,
   UnauthorizedStaffError,
 } from '../src/fidelizacion/contracts.js';
-import { createEarnAttemptStore, earnFlowNotice, runEarnCreation } from '../src/fidelizacion/earn-flow.js';
+import {
+  createEarnAttemptStore,
+  earnFlowNotice,
+  runEarnCreation,
+  runSuccessfulRefresh,
+} from '../src/fidelizacion/earn-flow.js';
 
 test('normaliza el email y acepta exclusivamente un staff activo de Fidelización', () => {
   assert.equal(normalizeEmail('  Operador@Ejemplo.COM '), 'operador@ejemplo.com');
@@ -115,7 +120,10 @@ test('conserva la idempotency key si createEarn tuvo éxito pero falla el refres
 
   const firstResult = await runEarnCreation({
     create: async () => { calls.push(firstAttempt.key); },
-    refresh: async () => { throw new Error('lectura temporalmente no disponible'); },
+    refresh: () => runSuccessfulRefresh({
+      refresh: async () => { throw new Error('lectura temporalmente no disponible'); },
+      onSuccess: () => attempts.clear(),
+    }),
   });
 
   assert.deepEqual(firstResult, {
@@ -128,13 +136,47 @@ test('conserva la idempotency key si createEarn tuvo éxito pero falla el refres
   const retryAttempt = attempts.get(signature);
   const retryResult = await runEarnCreation({
     create: async () => { calls.push(retryAttempt.key); },
-    refresh: async () => {},
+    refresh: () => runSuccessfulRefresh({
+      refresh: async () => {},
+      onSuccess: () => attempts.clear(),
+    }),
   });
   assert.deepEqual(retryResult, { created: true, refreshed: true });
   assert.deepEqual(calls, ['attempt-1', 'attempt-1']);
   assert.match(earnFlowNotice(firstResult).message, /fue creada, pero no se pudo actualizar la vista/i);
-  attempts.clear();
   assert.equal(attempts.get(signature).key, 'attempt-2');
+});
+
+test('un refresco exitoso posterior invalida el intento earn ambiguo', async () => {
+  const keys = ['attempt-1', 'attempt-2'];
+  const attempts = createEarnAttemptStore(() => keys.shift());
+  const signature = 'account-id:180';
+  const firstAttempt = attempts.get(signature);
+  const calls = [];
+
+  const firstResult = await runEarnCreation({
+    create: async () => { calls.push(firstAttempt.key); },
+    refresh: () => runSuccessfulRefresh({
+      refresh: async () => { throw new Error('lectura temporalmente no disponible'); },
+      onSuccess: () => attempts.clear(),
+    }),
+  });
+  assert.equal(firstResult.created, true);
+  assert.equal(firstResult.refreshed, false);
+  assert.equal(attempts.get(signature).key, 'attempt-1');
+
+  await runSuccessfulRefresh({
+    refresh: async () => {},
+    onSuccess: () => attempts.clear(),
+  });
+  const nextAttempt = attempts.get(signature);
+  assert.equal(nextAttempt.key, 'attempt-2');
+
+  await runEarnCreation({
+    create: async () => { calls.push(nextAttempt.key); },
+    refresh: async () => {},
+  });
+  assert.deepEqual(calls, ['attempt-1', 'attempt-2']);
 });
 
 test('distingue una creación fallida de una creación exitosa con refresh fallido', async () => {

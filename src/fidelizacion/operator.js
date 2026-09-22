@@ -16,7 +16,12 @@ import {
   panelStateText,
   UnauthorizedStaffError,
 } from './contracts.js';
-import { createEarnAttemptStore, earnFlowNotice, runEarnCreation } from './earn-flow.js';
+import {
+  createEarnAttemptStore,
+  earnFlowNotice,
+  runEarnCreation,
+  runSuccessfulRefresh,
+} from './earn-flow.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -191,11 +196,7 @@ async function handleSearch(event) {
     state.notice = null;
     renderPanel();
     try {
-      state.account = await searchAccount(client, state.searchedEmail);
-      state.operations = state.account
-        ? await listPendingOperations(client, state.account.account_id)
-        : [];
-      earnAttempts.clear();
+      await synchronizeOperator(state.searchedEmail);
     } catch (error) {
       state.account = null;
       state.operations = [];
@@ -229,9 +230,6 @@ async function handleEarn(event) {
         }),
         refresh: refreshData,
       });
-      if (result.created && result.refreshed) {
-        earnAttempts.clear();
-      }
       state.notice = earnFlowNotice(result);
     } catch (error) {
       state.notice = { type: 'error', message: error.message };
@@ -272,7 +270,6 @@ async function refreshAccount() {
     renderPanel();
     try {
       await refreshData();
-      earnAttempts.clear();
     } catch (error) {
       state.notice = { type: 'error', message: error.message };
     } finally {
@@ -283,10 +280,21 @@ async function refreshAccount() {
 }
 
 async function refreshData() {
-  const account = await searchAccount(client, state.account.cliente_email);
-  if (!account) throw new Error('La cuenta ya no está disponible.');
-  state.account = account;
-  state.operations = await listPendingOperations(client, account.account_id);
+  await synchronizeOperator(state.account.cliente_email, true);
+}
+
+async function synchronizeOperator(email, requireAccount = false) {
+  await runSuccessfulRefresh({
+    refresh: async () => {
+      const account = await searchAccount(client, email);
+      if (!account && requireAccount) throw new Error('La cuenta ya no está disponible.');
+      state.account = account;
+      state.operations = account
+        ? await listPendingOperations(client, account.account_id)
+        : [];
+    },
+    onSuccess: () => earnAttempts.clear(),
+  });
 }
 
 async function logout() {

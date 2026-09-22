@@ -11,6 +11,12 @@ export function createEarnAttemptStore(createKey) {
   };
 }
 
+export async function runSuccessfulRefresh({ refresh, onSuccess }) {
+  const result = await refresh();
+  onSuccess();
+  return result;
+}
+
 export async function runEarnCreation({ create, refresh }) {
   try {
     await create();
