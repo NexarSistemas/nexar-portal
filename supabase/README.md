@@ -25,6 +25,7 @@ proyecto enlazado ni comandos de despliegue de base de datos.
 | Fidelización Fase 1 | Crea el esquema multi-tenant del MVP, integridad cruzada, grants mínimos y RLS de solo lectura para clientes y staff. | Aditiva; requiere prueba local de autorización |
 | Fidelización Fase 2 | Agrega RPC para crear, resolver por QR y confirmar acreditaciones `earn` con autorización, atomicidad e idempotencia. | Aditiva; requiere prueba local transaccional |
 | Fidelización Fase 3 | Agrega RPC para intención, escaneo, confirmación y cancelación de canjes `redeem`, con costo congelado y saldo derivado. | Aditiva; requiere prueba local transaccional y de concurrencia |
+| Fidelización Fase 4 | Agrega la búsqueda exacta por email y saldo derivado para staff del panel operador, sin exponer `auth.users`. | Aditiva; requiere prueba local de autorización y aislamiento |
 | M07 | Retira Auth legacy solo despues del gate operativo. | Parcialmente destructiva y bloqueada |
 
 `precios_planes`, las tablas legacy, `admin_audit_log` y la autenticacion propia
@@ -47,6 +48,11 @@ recompensa activa, QR como localizador sin débito, autorización de staff,
 congelamiento del costo, idempotencia, saldo insuficiente, cancelación y el
 caso de dos canjes contra la misma cuenta. Finaliza con `ROLLBACK`; la
 serialización se implementa bloqueando la cuenta antes de recalcular el saldo.
+
+La prueba `supabase/tests/fidelizacion_fase4_panel_operador.sql` valida búsqueda
+exacta normalizada, roles `admin` y `operador`, saldo cero y saldo derivado,
+cuentas y membresías inactivas, tenant inactivo y aislamiento entre tenants. La
+suite es transaccional y finaliza con `ROLLBACK`.
 
 La descripcion completa del contrato, riesgos, reversibilidad y gates se
 encuentra en [docs/database/baseline.md](../docs/database/baseline.md). El

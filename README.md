@@ -33,6 +33,10 @@ Todo valor expuesto mediante `VITE_*` queda incorporado al bundle del navegador 
 
 El login utiliza Supabase Auth con email y contraseña. Tras iniciar sesión, el frontend obtiene el perfil propio desde `public.perfiles` y exige que esté activo y tenga rol `admin` o `vendedor`; el rol vendedor también requiere `vendedor_id`. La sesión se restaura desde Supabase Auth. RLS sigue siendo la frontera de autorización.
 
+Nexar Fidelización es un módulo independiente del Portal Vendedor. Su ingreso
+está en `/fidelizacion/login/` y su panel en `/fidelizacion/operador/`; autoriza
+exclusivamente mediante `fidelizacion_staff` y no consulta `public.perfiles`.
+
 ## Publicación
 
 Antes de publicar el repositorio o desplegar GitHub Pages, seguir la checklist de [seguridad previa a publicación](docs/security/publicacion.md).
