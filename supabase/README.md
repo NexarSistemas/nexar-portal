@@ -26,6 +26,7 @@ proyecto enlazado ni comandos de despliegue de base de datos.
 | Fidelización Fase 2 | Agrega RPC para crear, resolver por QR y confirmar acreditaciones `earn` con autorización, atomicidad e idempotencia. | Aditiva; requiere prueba local transaccional |
 | Fidelización Fase 3 | Agrega RPC para intención, escaneo, confirmación y cancelación de canjes `redeem`, con costo congelado y saldo derivado. | Aditiva; requiere prueba local transaccional y de concurrencia |
 | Fidelización Fase 4 | Agrega la búsqueda exacta por email y saldo derivado para staff del panel operador, sin exponer `auth.users`. | Aditiva; requiere prueba local de autorización y aislamiento |
+| Fidelización Fase 5 | Agrega el registro idempotente de la cuenta cliente mediante el QR público del tenant y la identidad de Auth. | Aditiva; requiere prueba local de concurrencia, autorización y aislamiento |
 | M07 | Retira Auth legacy solo despues del gate operativo. | Parcialmente destructiva y bloqueada |
 
 `precios_planes`, las tablas legacy, `admin_audit_log` y la autenticacion propia
@@ -53,6 +54,11 @@ La prueba `supabase/tests/fidelizacion_fase4_panel_operador.sql` valida búsqued
 exacta normalizada, roles `admin` y `operador`, saldo cero y saldo derivado,
 cuentas y membresías inactivas, tenant inactivo y aislamiento entre tenants. La
 suite es transaccional y finaliza con `ROLLBACK`.
+
+La prueba `supabase/tests/fidelizacion_fase5_registro_cliente.sql` valida alta
+idempotente por QR, asociaciones aisladas por usuario y tenant, rechazo de QR o
+cuentas no habilitadas y conservación del bloqueo de `INSERT` directo. La suite
+es transaccional y finaliza con `ROLLBACK`.
 
 La descripcion completa del contrato, riesgos, reversibilidad y gates se
 encuentra en [docs/database/baseline.md](../docs/database/baseline.md). El
