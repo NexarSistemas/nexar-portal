@@ -205,6 +205,25 @@ de clientes. El email de otro tenant y el inexistente producen el mismo resultad
 vacío. El saldo usa `COALESCE(SUM(fidelizacion_point_movements.puntos), 0)` y no
 crea estado mutable paralelo.
 
+## Fidelización Fase 5: registro seguro de clientes
+
+La migración `20260914000696_fidelizacion_fase5_registro_cliente.sql` agrega
+`fidelizacion_registrar_cuenta_cliente(text)` para asociar al usuario
+autenticado con el tenant activo localizado por su QR público. La RPC acepta
+únicamente `public_qr_code`, deriva la identidad con `auth.uid()` y devuelve
+solamente `account_id` y `tenant_id`; no consulta `auth.users`, `public.perfiles`
+ni `fidelizacion_staff`.
+
+La implementación pública `SECURITY INVOKER` delega en un helper
+`SECURITY DEFINER` de `app_private`, ambos con `search_path` vacío y ejecución
+restringida a `authenticated`. El helper rechaza sesión ausente, QR inválido,
+tenant inactivo y cuentas existentes inactivas. El `INSERT` directo de
+`authenticated` sobre `fidelizacion_accounts` permanece revocado.
+
+La idempotencia y la carrera concurrente se resuelven con un único
+`INSERT ... ON CONFLICT` sobre la unicidad existente `(tenant_id, user_id)`.
+No se agregan locks, constraints, roles ni estado mutable.
+
 ## Validacion y reversibilidad
 
 Las consultas en `supabase/validation/m00.sql` a `m07.sql`, incluida `m06_6.sql`, son de lectura y se
