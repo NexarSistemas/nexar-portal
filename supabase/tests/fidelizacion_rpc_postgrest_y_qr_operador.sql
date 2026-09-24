@@ -57,4 +57,21 @@ begin
 end;
 $$;
 
+-- COALESCE es sintaxis SQL: no puede calificarse como pg_catalog.coalesce,
+-- porque el error se manifiesta recien al ejecutar los helpers desde los RPC.
+do $$
+declare
+  v_helper regprocedure;
+begin
+  foreach v_helper in array array[
+    'app_private.fidelizacion_buscar_cuenta_staff(text)'::regprocedure,
+    'app_private.fidelizacion_obtener_saldo_cliente(uuid)'::regprocedure
+  ] loop
+    if pg_get_functiondef(v_helper) ilike '%pg_catalog.coalesce(%' then
+      raise exception 'El helper % califica COALESCE y fallaria con 42883 al ejecutarse.', v_helper;
+    end if;
+  end loop;
+end;
+$$;
+
 rollback;
