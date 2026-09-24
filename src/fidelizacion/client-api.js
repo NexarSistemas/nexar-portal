@@ -1,5 +1,4 @@
 import {
-  calculateBalance,
   createQrContext,
   normalizeClientAccounts,
   normalizeRpcRow,
@@ -69,22 +68,14 @@ export async function listClientMovements(client, accountId) {
 }
 
 export async function getClientBalance(client, accountId) {
-  const pageSize = 100;
-  let from = 0;
-  let balance = 0;
-  while (true) {
-    const { data, error } = await client
-      .from('fidelizacion_point_movements')
-      .select('id,puntos')
-      .eq('account_id', accountId)
-      .order('id', { ascending: true })
-      .range(from, from + pageSize - 1);
-    if (error) throw new Error(READ_ERROR);
-    const movements = data ?? [];
-    balance += calculateBalance(movements);
-    if (movements.length < pageSize) return balance;
-    from += pageSize;
+  const { data, error } = await client.rpc('fidelizacion_obtener_saldo_cliente', {
+    p_account_id: accountId,
+  });
+  const balance = Number(data);
+  if (error || !['number', 'string'].includes(typeof data) || !Number.isFinite(balance)) {
+    throw new Error(READ_ERROR);
   }
+  return balance;
 }
 
 export async function listClientOperations(client, accountId) {

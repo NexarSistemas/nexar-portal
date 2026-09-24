@@ -38,13 +38,6 @@ export function normalizeClientAccounts(rows) {
   });
 }
 
-export function calculateBalance(movements) {
-  return (Array.isArray(movements) ? movements : []).reduce((total, movement) => {
-    const points = Number(movement?.puntos);
-    return Number.isFinite(points) ? total + points : total;
-  }, 0);
-}
-
 export function createQrContext(qrCode, tenantId) {
   return qrCode && tenantId ? { qrCode, tenantId } : null;
 }

@@ -224,6 +224,13 @@ La idempotencia y la carrera concurrente se resuelven con un único
 `INSERT ... ON CONFLICT` sobre la unicidad existente `(tenant_id, user_id)`.
 No se agregan locks, constraints, roles ni estado mutable.
 
+La migración `20260914000697_fidelizacion_fase5_saldo_cliente.sql` agrega
+`fidelizacion_obtener_saldo_cliente(uuid)`: una lectura atómica del saldo
+derivado para la cuenta activa del cliente autenticado. El RPC deriva la
+identidad con `auth.uid()`, verifica propiedad, cuenta y tenant activos, y
+calcula `COALESCE(SUM(fidelizacion_point_movements.puntos), 0)` sin aceptar un
+`user_id` ni crear saldo mutable.
+
 ## Validacion y reversibilidad
 
 Las consultas en `supabase/validation/m00.sql` a `m07.sql`, incluida `m06_6.sql`, son de lectura y se

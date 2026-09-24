@@ -14,7 +14,6 @@ import {
 } from '../src/fidelizacion/client-api.js';
 import {
   activeQrCode,
-  calculateBalance,
   clientOperationText,
   createAttemptStore,
   createQrContext,
@@ -56,26 +55,21 @@ test('normaliza respuestas RPC y cuentas sin exponer contratos inconsistentes', 
   }]), [{ id: 'account-id', tenantId: 'tenant-id', tenantName: 'Comercio demo' }]);
 });
 
-test('deriva el saldo exclusivamente desde movimientos confirmados', () => {
-  assert.equal(calculateBalance([{ puntos: 180 }, { puntos: '-60' }, { puntos: 'inválido' }]), 120);
-  assert.equal(calculateBalance([]), 0);
-});
-
-test('calcula el saldo completo aunque el historial visible supere 50 movimientos', async () => {
-  const movements = Array.from({ length: 120 }, (_, index) => ({ id: index + 1, puntos: 1 }));
-  const ranges = [];
-  const query = {
-    select() { return this; },
-    eq() { return this; },
-    order() { return this; },
-    range(from, to) {
-      ranges.push([from, to]);
-      return Promise.resolve({ data: movements.slice(from, to + 1), error: null });
-    },
-  };
-  const client = { from: () => query };
-  assert.equal(await getClientBalance(client, 'account-id'), 120);
-  assert.deepEqual(ranges, [[0, 99], [100, 199]]);
+test('obtiene el saldo mediante una única RPC sin paginar movimientos en el cliente', async () => {
+  let call;
+  const client = { rpc: async (name, args) => {
+    call = { name, args };
+    return { data: 230, error: null };
+  } };
+  assert.equal(await getClientBalance(client, 'account-id'), 230);
+  assert.deepEqual(call, {
+    name: 'fidelizacion_obtener_saldo_cliente',
+    args: { p_account_id: 'account-id' },
+  });
+  await assert.rejects(
+    () => getClientBalance({ rpc: async () => ({ data: null, error: null }) }, 'account-id'),
+    { message: 'No pudimos cargar tu programa de puntos. Intentá nuevamente.' },
+  );
 });
 
 test('el QR sólo queda activo para la cuenta del mismo tenant', () => {
