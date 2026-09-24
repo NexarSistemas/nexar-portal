@@ -13,6 +13,24 @@ export async function signInFidelizacion(client, email, password) {
   return data.user;
 }
 
+export async function signUpFidelizacion(client, email, password, emailRedirectTo) {
+  const credentials = {
+    email: normalizeEmail(email),
+    password,
+  };
+  if (emailRedirectTo) credentials.options = { emailRedirectTo };
+
+  const { data, error } = await client.auth.signUp(credentials);
+  if (error || !data?.user) {
+    throw new Error('No pudimos crear la cuenta. Revisá tus datos e intentá nuevamente.');
+  }
+  return {
+    user: data.user,
+    session: data.session ?? null,
+    confirmationRequired: !data.session,
+  };
+}
+
 export async function getSessionUser(client) {
   const { data, error } = await client.auth.getSession();
   if (error) throw new Error(READ_ERROR);

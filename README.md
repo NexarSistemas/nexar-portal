@@ -37,6 +37,13 @@ Nexar Fidelización es un módulo independiente del Portal Vendedor. Su ingreso
 está en `/fidelizacion/login/` y su panel en `/fidelizacion/operador/`; autoriza
 exclusivamente mediante `fidelizacion_staff` y no consulta `public.perfiles`.
 
+La experiencia de cliente vive en `/fidelizacion/cliente/login/` y
+`/fidelizacion/cliente/`. Usa Supabase Auth, las cuentas propias protegidas por
+RLS y los RPC de Fidelización; tampoco depende de `public.perfiles`. Los enlaces
+QR con formato `/q/{public_qr_code}` se resuelven mediante el `404.html` estático
+de GitHub Pages y continúan el flujo en la ruta cliente sin acreditar puntos por
+sí mismos.
+
 ## Publicación
 
 Antes de publicar el repositorio o desplegar GitHub Pages, seguir la checklist de [seguridad previa a publicación](docs/security/publicacion.md).

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#102d4a" />
+    <meta name="robots" content="noindex" />
+    <title>Enlace | Nexar Fidelización</title>
+    <style>
+      :root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#183047;background:#f4f7f9}
+      *{box-sizing:border-box}body{margin:0;min-width:320px}.page{min-height:100vh;display:grid;place-items:center;padding:24px}.card{width:min(480px,100%);padding:36px;border:1px solid #dfe7ed;border-radius:14px;background:#fff;text-align:center;box-shadow:0 16px 50px #102d4a12}.eyebrow{margin:0 0 9px;color:#0c704a;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}h1{margin:6px 0 10px;color:#102d4a}.muted{color:#647585;line-height:1.55}.button{min-height:42px;display:inline-flex;align-items:center;justify-content:center;margin-top:10px;border-radius:8px;padding:0 16px;background:#102d4a;color:#fff;font-weight:700;text-decoration:none}
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="card">
+        <p class="eyebrow">Nexar Fidelización</p>
+        <h1>Abriendo el programa…</h1>
+        <p class="muted" id="message">Estamos validando el enlace del comercio.</p>
+        <a class="button" id="fallback" hidden>Ir a mi cuenta</a>
+      </section>
+    </main>
+    <script>
+      (() => {
+        const match = window.location.pathname.match(/^(.*)\/q\/([A-Za-z0-9_-]{32})\/?$/);
+        const basePath = match?.[1] ?? '';
+        const destination = new URL(`${basePath}/fidelizacion/cliente/`, window.location.origin);
+        if (match) {
+          destination.searchParams.set('qr', match[2]);
+          window.location.replace(destination);
+          return;
+        }
+        document.querySelector('h1').textContent = 'Este enlace no está disponible';
+        document.querySelector('#message').textContent = 'Volvé a escanear el QR del comercio o ingresá a tu programa de puntos.';
+        const fallback = document.querySelector('#fallback');
+        fallback.href = destination;
+        fallback.hidden = false;
+      })();
+    </script>
+  </body>
+</html>
