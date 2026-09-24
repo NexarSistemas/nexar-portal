@@ -45,7 +45,7 @@ export async function signOutFidelizacion(client) {
 export async function resolveStaffAccess(client, userId) {
   const { data, error } = await client
     .from('fidelizacion_staff')
-    .select('rol,tenant:fidelizacion_tenants!inner(nombre,activo)')
+    .select('rol,tenant:fidelizacion_tenants!inner(nombre,activo,public_qr_code)')
     .eq('user_id', userId)
     .eq('activo', true)
     .eq('tenant.activo', true)

@@ -7,10 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test"
+    "test": "node --test",
+    "test:e2e:fidelizacion": "REQUIRE_FIDELIZACION_E2E=1 node --test tests/fidelizacion-postgrest-e2e.test.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.4"
+    "@supabase/supabase-js": "^2.57.4",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "vite": "^7.1.7"

@@ -113,6 +113,10 @@ button,input{font:inherit}
 .fidelity-intro .fidelity-muted{max-width:690px;margin-bottom:0}
 .fidelity-card{padding:24px;border:1px solid var(--fidelity-line);border-radius:13px;background:#fff;box-shadow:0 8px 26px #102d4a08}
 .fidelity-card h2{margin:0;color:var(--fidelity-navy);font-size:20px}
+.fidelity-qr-card{display:flex;align-items:center;gap:24px;margin-bottom:20px}
+.fidelity-qr-image{width:160px;height:160px;padding:8px;border:1px solid var(--fidelity-line);border-radius:10px;background:#fff;image-rendering:pixelated}
+.fidelity-qr-card .fidelity-muted{max-width:650px}
+.fidelity-qr-card .fidelity-button{margin-top:4px}
 .fidelity-search-card{display:grid;grid-template-columns:220px 1fr;align-items:end;gap:28px}
 .fidelity-inline-form{display:grid;grid-template-columns:1fr auto;gap:10px}
 .fidelity-notice{padding:13px 16px;border-radius:9px;font-size:14px;font-weight:650}
@@ -181,6 +185,7 @@ button,input{font:inherit}
   .fidelity-main{width:min(100% - 32px,1180px);padding:30px 0 38px}
   .fidelity-intro h1{font-size:27px}
   .fidelity-card{padding:19px}
+  .fidelity-qr-card{align-items:flex-start;flex-direction:column}
   .fidelity-search-card{grid-template-columns:1fr;gap:14px}
   .fidelity-inline-form{grid-template-columns:1fr}
   .fidelity-balance-card{align-items:flex-start;flex-direction:column}
