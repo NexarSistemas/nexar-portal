@@ -57,7 +57,14 @@ select
     as cuenta_resuelta_en_tenant_de_recompensa,
   pg_catalog.position('puntos_requeridos' in definicion) > 0 as congela_costo,
   pg_catalog.position('on conflict on constraint fidelizacion_operations_tenant_idempotency_key_key' in definicion) > 0 as idempotencia_por_constraint,
-  pg_catalog.position('pending_customer' in definicion) > 0 as crea_pending_customer
+  pg_catalog.position('pending_customer' in definicion) > 0 as crea_pending_customer,
+  pg_catalog.position('from public.fidelizacion_accounts a' in definicion) > 0
+    and pg_catalog.position('for update' in pg_catalog.substr(definicion,
+      pg_catalog.position('from public.fidelizacion_accounts a' in definicion))) > 0 as bloquea_cuenta_para_reservar,
+  pg_catalog.position('sum(m.puntos)' in definicion) > 0 as calcula_saldo_confirmado,
+  pg_catalog.position('sum(o.puntos)' in definicion) > 0
+    and pg_catalog.position('o.estado in (''pending_customer'', ''pending_staff'')' in definicion) > 0
+    as descuenta_reservas_vigentes
 from (
   select pg_catalog.lower(pg_get_functiondef('app_private.fidelizacion_crear_redeem(uuid,text,timestamp with time zone)'::regprocedure)) as definicion
 ) f;

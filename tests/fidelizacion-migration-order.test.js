@@ -11,6 +11,7 @@ const m07 = '20260914000701_m07_hardening_retiro_auth_legacy.sql';
 const driftReconciliations = [
   '20260924225227_fidelizacion_corrige_coalesce_crear_earn.sql',
   '20260924232934_fidelizacion_corrige_coalesce_crear_redeem.sql',
+  '20260924235016_fidelizacion_reserva_saldo_redeem.sql',
 ];
 
 test('el bootstrap corrige crear earn y redeem antes del gate M07', async () => {
@@ -32,4 +33,9 @@ test('el bootstrap corrige crear earn y redeem antes del gate M07', async () => 
     assert.match(source, /v_expires_at timestamptz := coalesce\(/,
       `${migration} debe asignar la expiración con COALESCE como sintaxis SQL`);
   }
+});
+
+test('la reserva de canjes conserva el orden forward-only posterior a M07', async () => {
+  const files = (await readdir(migrationsUrl)).sort();
+  assert.ok(files.indexOf('20260924235016_fidelizacion_reserva_saldo_redeem.sql') > files.indexOf(m07));
 });

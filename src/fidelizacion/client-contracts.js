@@ -63,6 +63,13 @@ export function pendingRedeems(operations, now = new Date()) {
   ));
 }
 
+export function availableRedeemPoints(confirmedBalance, operations, now = new Date()) {
+  const reserved = pendingRedeems(operations, now).reduce((total, operation) => (
+    total + Math.max(0, Number(operation.puntos) || 0)
+  ), 0);
+  return Math.max(0, (Number(confirmedBalance) || 0) - reserved);
+}
+
 export function clientOperationText(operation) {
   if (operation?.tipo !== 'redeem') return '';
   if (operation.estado === 'pending_customer') return 'Escaneá el QR del comercio para continuar.';
