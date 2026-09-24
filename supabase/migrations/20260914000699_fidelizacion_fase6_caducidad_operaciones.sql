@@ -22,7 +22,7 @@ declare
   v_user_id uuid := auth.uid();
   v_tenant_id uuid;
   v_idempotency_key text := pg_catalog.btrim(p_idempotency_key);
-  v_expires_at timestamptz := pg_catalog.coalesce(
+  v_expires_at timestamptz := coalesce(
     p_expires_at,
     pg_catalog.now() + interval '15 minutes'
   );
@@ -115,7 +115,7 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_idempotency_key text := pg_catalog.btrim(p_idempotency_key);
-  v_expires_at timestamptz := pg_catalog.coalesce(
+  v_expires_at timestamptz := coalesce(
     p_expires_at,
     pg_catalog.now() + interval '15 minutes'
   );
