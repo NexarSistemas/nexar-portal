@@ -1,4 +1,4 @@
--- Fidelizacion Fase 6: caducidad server-side por defecto para operaciones nuevas.
+-- Fidelizacion Fase 6: corrige la construccion SQL usada para la caducidad por defecto.
 -- No modifica operaciones existentes ni transiciona automaticamente su estado.
 
 create or replace function app_private.fidelizacion_crear_earn(
