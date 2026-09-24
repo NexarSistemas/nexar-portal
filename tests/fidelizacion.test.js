@@ -10,6 +10,7 @@ import {
   signInFidelizacion,
 } from '../src/fidelizacion/api.js';
 import {
+  commerceQrUrl,
   createActionLock,
   normalizeEmail,
   operationPresentation,
@@ -23,13 +24,14 @@ import {
   runEarnCreation,
   runSuccessfulRefresh,
 } from '../src/fidelizacion/earn-flow.js';
+import { createCommerceQrImage } from '../src/fidelizacion/qr.js';
 
 test('normaliza el email y acepta exclusivamente un staff activo de Fidelización', () => {
   assert.equal(normalizeEmail('  Operador@Ejemplo.COM '), 'operador@ejemplo.com');
   assert.deepEqual(parseStaffAccess([{
     rol: 'operador',
-    tenant: { nombre: 'Comercio demo', activo: true },
-  }]), { role: 'operador', tenantName: 'Comercio demo' });
+    tenant: { nombre: 'Comercio demo', activo: true, public_qr_code: 'AbCdEfGhIjKlMnOpQrStUvWxYz012345' },
+  }]), { role: 'operador', tenantName: 'Comercio demo', tenantQrCode: 'AbCdEfGhIjKlMnOpQrStUvWxYz012345' });
 });
 
 test('rechaza usuario sin staff, rol inválido o membresía ambigua', () => {
@@ -44,7 +46,7 @@ test('rechaza usuario sin staff, rol inválido o membresía ambigua', () => {
 test('resuelve autorización únicamente desde fidelizacion_staff y el tenant activo', async () => {
   const calls = [];
   const result = { data: [{
-    rol: 'admin', tenant: { nombre: 'Comercio demo', activo: true },
+    rol: 'admin', tenant: { nombre: 'Comercio demo', activo: true, public_qr_code: 'AbCdEfGhIjKlMnOpQrStUvWxYz012345' },
   }], error: null };
   const query = {
     select(value) { calls.push(['select', value]); return this; },
@@ -54,11 +56,27 @@ test('resuelve autorización únicamente desde fidelizacion_staff y el tenant ac
   };
   const client = { from(table) { calls.push(['from', table]); return query; } };
   assert.deepEqual(await resolveStaffAccess(client, 'auth-user-id'), {
-    role: 'admin', tenantName: 'Comercio demo',
+    role: 'admin', tenantName: 'Comercio demo', tenantQrCode: 'AbCdEfGhIjKlMnOpQrStUvWxYz012345',
   });
   assert.equal(calls[0][1], 'fidelizacion_staff');
   assert.equal(calls.some((call) => String(call).includes('perfiles')), false);
+  assert.equal(calls.some((call) => String(call).includes('public_qr_code')), true);
   assert.equal(calls.some((call) => call[0] === 'eq' && call[1] === 'user_id' && call[2] === 'auth-user-id'), true);
+});
+
+test('construye el QR estático desde la ruta pública del comercio', () => {
+  assert.equal(
+    commerceQrUrl('AbCdEfGhIjKlMnOpQrStUvWxYz012345', {
+      href: 'https://demo.test/nexar-portal/fidelizacion/operador/',
+    }),
+    'https://demo.test/nexar-portal/q/AbCdEfGhIjKlMnOpQrStUvWxYz012345',
+  );
+  assert.equal(commerceQrUrl('qr-inválido', { href: 'https://demo.test/fidelizacion/operador/' }), null);
+});
+
+test('genera localmente una imagen QR para el enlace público del comercio', async () => {
+  const image = await createCommerceQrImage('https://demo.test/q/AbCdEfGhIjKlMnOpQrStUvWxYz012345');
+  assert.match(image, /^data:image\/png;base64,/);
 });
 
 test('el login usa Supabase Auth y oculta el error técnico', async () => {

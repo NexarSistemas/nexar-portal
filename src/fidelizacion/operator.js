@@ -11,6 +11,7 @@ import {
   signOutFidelizacion,
 } from './api.js';
 import {
+  commerceQrUrl,
   createActionLock,
   operationPresentation,
   panelStateText,
@@ -22,6 +23,7 @@ import {
   runEarnCreation,
   runSuccessfulRefresh,
 } from './earn-flow.js';
+import { createCommerceQrImage } from './qr.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -35,6 +37,8 @@ const state = {
   searchedEmail: '',
   loading: false,
   notice: null,
+  commerceQrUrl: null,
+  commerceQrImage: null,
 };
 
 function loginUrl() {
@@ -87,6 +91,7 @@ function renderPanel() {
           <h1>Gestión de puntos y canjes</h1>
           <p class="fidelity-muted">Buscá una cuenta por email para acreditar puntos o gestionar sus canjes pendientes.</p>
         </section>
+        ${renderCommerceQr()}
         ${renderNotice()}
         <section class="fidelity-card fidelity-search-card" aria-labelledby="search-title">
           <div>
@@ -103,6 +108,20 @@ function renderPanel() {
       </main>
     </div>`;
   bindPanelEvents();
+}
+
+function renderCommerceQr() {
+  if (!state.commerceQrUrl || !state.commerceQrImage) return '';
+  return `
+    <section class="fidelity-card fidelity-qr-card" aria-labelledby="commerce-qr-title">
+      <img class="fidelity-qr-image" src="${state.commerceQrImage}" alt="Código QR estático de ${escapeHtml(state.access.tenantName)}" />
+      <div>
+        <p class="fidelity-step">QR del comercio</p>
+        <h2 id="commerce-qr-title">Compartí este QR con tus clientes</h2>
+        <p class="fidelity-muted">Identifica a ${escapeHtml(state.access.tenantName)}. Escanearlo abre el programa del comercio; por sí solo no acredita ni descuenta puntos.</p>
+        <a class="fidelity-button fidelity-button-quiet" href="${state.commerceQrUrl}">Abrir enlace del QR</a>
+      </div>
+    </section>`;
 }
 
 function renderInitialState() {
@@ -309,6 +328,8 @@ async function start() {
     const user = await getSessionUser(client);
     if (!user) return window.location.assign(loginUrl());
     state.access = await resolveStaffAccess(client, user.id);
+    state.commerceQrUrl = commerceQrUrl(state.access.tenantQrCode, window.location);
+    state.commerceQrImage = await createCommerceQrImage(state.commerceQrUrl);
     renderPanel();
   } catch (error) {
     if (error instanceof UnauthorizedStaffError) return renderUnauthorized();

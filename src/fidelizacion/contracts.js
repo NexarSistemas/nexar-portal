@@ -1,3 +1,5 @@
+import { normalizeQrCode } from './client-contracts.js';
+
 export const STAFF_ROLES = new Set(['admin', 'operador']);
 
 export class UnauthorizedStaffError extends Error {
@@ -11,14 +13,21 @@ export function normalizeEmail(value) {
   return String(value ?? '').trim().toLowerCase();
 }
 
+export function commerceQrUrl(qrCode, location) {
+  const normalized = normalizeQrCode(qrCode);
+  if (!normalized) return null;
+  return new URL(`../../q/${encodeURIComponent(normalized)}`, location.href).href;
+}
+
 export function parseStaffAccess(rows) {
   if (!Array.isArray(rows) || rows.length !== 1) throw new UnauthorizedStaffError();
   const membership = rows[0];
   const tenant = Array.isArray(membership.tenant) ? membership.tenant[0] : membership.tenant;
-  if (!STAFF_ROLES.has(membership.rol) || !tenant?.activo || !tenant.nombre) {
+  const tenantQrCode = normalizeQrCode(tenant?.public_qr_code);
+  if (!STAFF_ROLES.has(membership.rol) || !tenant?.activo || !tenant.nombre || !tenantQrCode) {
     throw new UnauthorizedStaffError();
   }
-  return { role: membership.rol, tenantName: tenant.nombre };
+  return { role: membership.rol, tenantName: tenant.nombre, tenantQrCode };
 }
 
 export function createActionLock() {
