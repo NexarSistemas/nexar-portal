@@ -46,6 +46,21 @@ select operation_id from public.fidelizacion_crear_redeem('31100000-0000-4000-80
 select operation_id from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000004', 'fase3-redeem-b', null);
 
 do $$
+declare
+  v_expires_at timestamptz;
+begin
+  select expires_at into v_expires_at
+  from public.fidelizacion_operations
+  where tenant_id = '11100000-0000-4000-8000-000000000001'
+    and idempotency_key = 'fase3-redeem-a';
+
+  if v_expires_at not between pg_catalog.now() + interval '14 minutes'
+    and pg_catalog.now() + interval '16 minutes' then
+    raise exception 'El redeem sin expiracion no recibio el vencimiento server-side esperado.';
+  end if;
+end $$;
+
+do $$
 begin
   begin
     perform * from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000003', 'fase3-inactiva', null);
