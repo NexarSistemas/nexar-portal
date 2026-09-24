@@ -79,6 +79,21 @@ from public.fidelizacion_crear_earn(
 );
 
 do $$
+declare
+  v_expires_at timestamptz;
+begin
+  select expires_at into v_expires_at
+  from public.fidelizacion_operations
+  where tenant_id = '11000000-0000-4000-8000-000000000001'
+    and idempotency_key = 'fase2-creacion-idempotente';
+
+  if v_expires_at not between pg_catalog.now() + interval '14 minutes'
+    and pg_catalog.now() + interval '16 minutes' then
+    raise exception 'La earn sin expiracion no recibio el vencimiento server-side esperado.';
+  end if;
+end $$;
+
+do $$
 begin
   begin
     perform *
