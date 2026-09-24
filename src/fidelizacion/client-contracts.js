@@ -13,6 +13,13 @@ export function qrCodeFromLocation(location) {
   return normalizeQrCode(match?.[1]);
 }
 
+export function urlWithoutQr(href) {
+  const url = new URL(href);
+  url.searchParams.delete('qr');
+  url.searchParams.delete('code');
+  return url;
+}
+
 export function normalizeRpcRow(data) {
   if (Array.isArray(data)) return data[0] ?? null;
   return data && typeof data === 'object' ? data : null;
@@ -36,6 +43,19 @@ export function calculateBalance(movements) {
     const points = Number(movement?.puntos);
     return Number.isFinite(points) ? total + points : total;
   }, 0);
+}
+
+export function createQrContext(qrCode, tenantId) {
+  return qrCode && tenantId ? { qrCode, tenantId } : null;
+}
+
+export function activeQrCode(qrContext, account) {
+  return qrContext?.tenantId === account?.tenantId ? qrContext.qrCode : null;
+}
+
+export function reconcileQrState(qrContext, account, pendingEarns = []) {
+  if (activeQrCode(qrContext, account)) return { qrContext, pendingEarns };
+  return { qrContext: null, pendingEarns: [] };
 }
 
 export function isExpired(operation, now = new Date()) {

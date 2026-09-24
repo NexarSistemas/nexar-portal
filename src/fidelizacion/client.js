@@ -4,20 +4,22 @@ import { getSessionUser, signOutFidelizacion } from './api.js';
 import {
   confirmClientEarn,
   createClientRedeem,
+  getClientBalance,
   getPendingEarns,
-  listClientAccounts,
+  loadClientAccess,
   listClientMovements,
   listClientOperations,
   listClientRewards,
-  registerClientAccount,
   scanClientRedeem,
 } from './client-api.js';
 import {
-  calculateBalance,
+  activeQrCode,
   clientOperationText,
   createAttemptStore,
   pendingRedeems,
   qrCodeFromLocation,
+  reconcileQrState,
+  urlWithoutQr,
 } from './client-contracts.js';
 import { createActionLock } from './contracts.js';
 import './styles.css';
@@ -33,7 +35,8 @@ const state = {
   movements: [],
   operations: [],
   pendingEarns: [],
-  qrCode: null,
+  balance: 0,
+  qrContext: null,
   loading: false,
   notice: null,
 };
@@ -49,7 +52,7 @@ function addFavicon() {
 
 function loginUrl() {
   const url = new URL('./login/', window.location.href);
-  if (state.qrCode) url.searchParams.set('qr', state.qrCode);
+  if (state.qrContext?.qrCode) url.searchParams.set('qr', state.qrContext.qrCode);
   return url;
 }
 
@@ -59,7 +62,7 @@ function renderLoading(text = 'Cargando tu programa de puntos…') {
 
 function render() {
   if (!state.account) return renderNoPrograms();
-  const balance = calculateBalance(state.movements);
+  const balance = state.balance;
   root.innerHTML = `
     <div class="fidelity-app fidelity-client-app">
       <header class="fidelity-header">
@@ -138,9 +141,14 @@ function renderProgramPicker() {
   root.querySelectorAll('[data-program-index]').forEach((button) => {
     button.addEventListener('click', async () => {
       state.account = state.accounts[Number(button.dataset.programIndex)];
+      const qrState = reconcileQrState(state.qrContext, state.account, state.pendingEarns);
+      if (state.qrContext && !qrState.qrContext) discardQrContext();
+      state.qrContext = qrState.qrContext;
       state.rewards = [];
       state.movements = [];
       state.operations = [];
+      state.pendingEarns = qrState.pendingEarns;
+      state.balance = 0;
       await runAction(refreshSnapshot);
     });
   });
@@ -152,7 +160,7 @@ function renderNotice() {
 }
 
 function renderQrPanel() {
-  if (!state.qrCode) return '';
+  if (!activeQrCode(state.qrContext, state.account)) return '';
   const redeemToScan = pendingRedeems(state.operations).filter((operation) => operation.estado === 'pending_customer');
   return `
     <section class="fidelity-card fidelity-qr-panel" aria-labelledby="qr-actions-title">
@@ -240,15 +248,18 @@ function bindEvents() {
 }
 
 async function refreshSnapshot() {
-  const [rewards, movements, operations] = await Promise.all([
+  const [rewards, movements, operations, balance] = await Promise.all([
     listClientRewards(client, state.account.tenantId),
     listClientMovements(client, state.account.id),
     listClientOperations(client, state.account.id),
+    getClientBalance(client, state.account.id),
   ]);
   state.rewards = rewards;
   state.movements = movements;
   state.operations = operations;
-  if (state.qrCode) state.pendingEarns = await getPendingEarns(client, state.qrCode);
+  state.balance = balance;
+  const qrCode = activeQrCode(state.qrContext, state.account);
+  state.pendingEarns = qrCode ? await getPendingEarns(client, qrCode) : [];
 }
 
 async function refresh() {
@@ -260,7 +271,9 @@ async function refresh() {
 
 async function confirmEarn(operationId) {
   await runAction(async () => {
-    await confirmClientEarn(client, { qrCode: state.qrCode, operationId });
+    await confirmClientEarn(client, {
+      qrCode: activeQrCode(state.qrContext, state.account), operationId,
+    });
     await refreshSnapshot();
     state.notice = { type: 'success', message: 'Puntos acreditados. Tu saldo ya está actualizado.' };
   });
@@ -289,7 +302,9 @@ async function createRedeem(rewardId) {
 
 async function scanRedeem(operationId) {
   await runAction(async () => {
-    await scanClientRedeem(client, { qrCode: state.qrCode, operationId });
+    await scanClientRedeem(client, {
+      qrCode: activeQrCode(state.qrContext, state.account), operationId,
+    });
     await refreshSnapshot();
     state.notice = { type: 'success', message: 'Canje enviado. Ahora el comercio debe confirmarlo.' };
   });
@@ -315,23 +330,33 @@ async function logout() {
   try { await signOutFidelizacion(client); } finally { window.location.assign(loginUrl()); }
 }
 
+function discardQrContext() {
+  state.qrContext = null;
+  state.pendingEarns = [];
+  sessionStorage.removeItem('nexar-fidelizacion-qr');
+  window.history.replaceState(null, '', urlWithoutQr(window.location.href));
+}
+
 async function start() {
   addFavicon();
   renderLoading();
-  state.qrCode = qrCodeFromLocation(window.location);
+  const qrCode = qrCodeFromLocation(window.location);
+  state.qrContext = qrCode ? { qrCode, tenantId: null } : null;
   try {
     client = getSupabaseClient();
     state.user = await getSessionUser(client);
     if (!state.user) return window.location.assign(loginUrl());
 
-    let associatedTenantId = null;
-    if (state.qrCode) {
-      const association = await registerClientAccount(client, state.qrCode);
-      associatedTenantId = association.tenant_id;
+    const access = await loadClientAccess(client, { userId: state.user.id, qrCode });
+    state.accounts = access.accounts;
+    state.qrContext = access.qrContext;
+    if (state.qrContext) {
       sessionStorage.removeItem('nexar-fidelizacion-qr');
+    } else if (access.associationError) {
+      discardQrContext();
+      state.notice = { type: 'error', message: access.associationError.message };
     }
-    state.accounts = await listClientAccounts(client, state.user.id);
-    state.account = state.accounts.find((account) => account.tenantId === associatedTenantId)
+    state.account = state.accounts.find((account) => account.tenantId === state.qrContext?.tenantId)
       ?? state.accounts[0]
       ?? null;
     if (!state.account) return render();

@@ -4,21 +4,27 @@ import { signUpFidelizacion } from '../src/fidelizacion/api.js';
 import {
   confirmClientEarn,
   createClientRedeem,
+  getClientBalance,
   getPendingEarns,
+  loadClientAccess,
   listClientAccounts,
   listClientMovements,
   registerClientAccount,
   scanClientRedeem,
 } from '../src/fidelizacion/client-api.js';
 import {
+  activeQrCode,
   calculateBalance,
   clientOperationText,
   createAttemptStore,
+  createQrContext,
   normalizeClientAccounts,
   normalizeQrCode,
   normalizeRpcRow,
   pendingRedeems,
   qrCodeFromLocation,
+  reconcileQrState,
+  urlWithoutQr,
 } from '../src/fidelizacion/client-contracts.js';
 
 const QR_CODE = 'AbCdEfGhIjKlMnOpQrStUvWxYz012345';
@@ -29,6 +35,10 @@ test('normaliza el QR desde query o ruta pública y rechaza payloads inválidos'
   assert.equal(qrCodeFromLocation({ href: `https://demo.test/fidelizacion/cliente/?qr=${QR_CODE}` }), QR_CODE);
   assert.equal(qrCodeFromLocation({ href: `https://demo.test/nexar-portal/q/${QR_CODE}` }), QR_CODE);
   assert.equal(qrCodeFromLocation({ href: 'https://demo.test/q/no-valido' }), null);
+  assert.equal(
+    urlWithoutQr(`https://demo.test/fidelizacion/cliente/?qr=${QR_CODE}&code=${QR_CODE}`).href,
+    'https://demo.test/fidelizacion/cliente/',
+  );
 });
 
 test('normaliza respuestas RPC y cuentas sin exponer contratos inconsistentes', () => {
@@ -49,6 +59,33 @@ test('normaliza respuestas RPC y cuentas sin exponer contratos inconsistentes', 
 test('deriva el saldo exclusivamente desde movimientos confirmados', () => {
   assert.equal(calculateBalance([{ puntos: 180 }, { puntos: '-60' }, { puntos: 'inválido' }]), 120);
   assert.equal(calculateBalance([]), 0);
+});
+
+test('calcula el saldo completo aunque el historial visible supere 50 movimientos', async () => {
+  const movements = Array.from({ length: 120 }, (_, index) => ({ id: index + 1, puntos: 1 }));
+  const ranges = [];
+  const query = {
+    select() { return this; },
+    eq() { return this; },
+    order() { return this; },
+    range(from, to) {
+      ranges.push([from, to]);
+      return Promise.resolve({ data: movements.slice(from, to + 1), error: null });
+    },
+  };
+  const client = { from: () => query };
+  assert.equal(await getClientBalance(client, 'account-id'), 120);
+  assert.deepEqual(ranges, [[0, 99], [100, 199]]);
+});
+
+test('el QR sólo queda activo para la cuenta del mismo tenant', () => {
+  const qrContext = createQrContext(QR_CODE, 'tenant-a');
+  assert.equal(activeQrCode(qrContext, { tenantId: 'tenant-a' }), QR_CODE);
+  assert.equal(activeQrCode(qrContext, { tenantId: 'tenant-b' }), null);
+  assert.deepEqual(
+    reconcileQrState(qrContext, { tenantId: 'tenant-b' }, [{ operation_id: 'earn-a' }]),
+    { qrContext: null, pendingEarns: [] },
+  );
 });
 
 test('filtra canjes pendientes vigentes y presenta su próximo paso', () => {
@@ -128,6 +165,28 @@ test('las cuentas cliente se leen por Auth/RLS sin consultar perfiles', async ()
   assert.equal(calls[0][1], 'fidelizacion_accounts');
   assert.equal(calls.some((call) => String(call).includes('perfiles')), false);
   assert.equal(calls.some((call) => call[0] === 'eq' && call[1] === 'user_id' && call[2] === 'auth-user-id'), true);
+});
+
+test('un QR rechazado no impide cargar las cuentas existentes del usuario autenticado', async () => {
+  const query = {
+    select() { return this; },
+    eq() { return this; },
+    order() {
+      return Promise.resolve({ data: [{
+        id: 'account-id', tenant_id: 'tenant-b', tenant: { nombre: 'Programa B', activo: true },
+      }], error: null });
+    },
+  };
+  const client = {
+    rpc: async () => ({ data: null, error: { message: 'QR inactivo' } }),
+    from: () => query,
+  };
+  const access = await loadClientAccess(client, { userId: 'user-id', qrCode: QR_CODE });
+  assert.equal(access.qrContext, null);
+  assert.equal(access.associationError.message, 'No pudimos vincular tu cuenta con este comercio.');
+  assert.deepEqual(access.accounts, [{
+    id: 'account-id', tenantId: 'tenant-b', tenantName: 'Programa B',
+  }]);
 });
 
 test('el historial se limita a movimientos propios y conserva el orden reciente', async () => {

@@ -1,4 +1,9 @@
-import { normalizeClientAccounts, normalizeRpcRow } from './client-contracts.js';
+import {
+  calculateBalance,
+  createQrContext,
+  normalizeClientAccounts,
+  normalizeRpcRow,
+} from './client-contracts.js';
 
 const READ_ERROR = 'No pudimos cargar tu programa de puntos. Intentá nuevamente.';
 const ACTION_ERROR = 'No pudimos completar la acción. Intentá nuevamente.';
@@ -26,6 +31,21 @@ export async function listClientAccounts(client, userId) {
   return normalizeClientAccounts(data);
 }
 
+export async function loadClientAccess(client, { userId, qrCode }) {
+  let qrContext = null;
+  let associationError = null;
+  if (qrCode) {
+    try {
+      const association = await registerClientAccount(client, qrCode);
+      qrContext = createQrContext(qrCode, association.tenant_id);
+    } catch (error) {
+      associationError = error;
+    }
+  }
+  const accounts = await listClientAccounts(client, userId);
+  return { accounts, qrContext, associationError };
+}
+
 export async function listClientRewards(client, tenantId) {
   const { data, error } = await client
     .from('fidelizacion_rewards')
@@ -46,6 +66,25 @@ export async function listClientMovements(client, accountId) {
     .limit(50);
   if (error) throw new Error(READ_ERROR);
   return data ?? [];
+}
+
+export async function getClientBalance(client, accountId) {
+  const pageSize = 100;
+  let from = 0;
+  let balance = 0;
+  while (true) {
+    const { data, error } = await client
+      .from('fidelizacion_point_movements')
+      .select('id,puntos')
+      .eq('account_id', accountId)
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(READ_ERROR);
+    const movements = data ?? [];
+    balance += calculateBalance(movements);
+    if (movements.length < pageSize) return balance;
+    from += pageSize;
+  }
 }
 
 export async function listClientOperations(client, accountId) {

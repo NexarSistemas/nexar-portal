@@ -5,7 +5,6 @@ import {
   signInFidelizacion,
   signUpFidelizacion,
 } from './api.js';
-import { registerClientAccount } from './client-api.js';
 import { createActionLock } from './contracts.js';
 import { qrCodeFromLocation } from './client-contracts.js';
 import './styles.css';
@@ -113,10 +112,6 @@ async function handleSubmit(event) {
       } else {
         await signInFidelizacion(client, values.get('email'), values.get('password'));
       }
-      if (qrCode) {
-        await registerClientAccount(client, qrCode);
-        sessionStorage.removeItem(QR_STORAGE_KEY);
-      }
       window.location.assign(clientUrl(qrCode));
     } catch (error) {
       messageType = 'error';
@@ -133,10 +128,6 @@ async function start() {
     const user = await getSessionUser(client);
     const qrCode = currentQrCode();
     if (user) {
-      if (qrCode) {
-        await registerClientAccount(client, qrCode);
-        sessionStorage.removeItem(QR_STORAGE_KEY);
-      }
       return window.location.assign(clientUrl(qrCode));
     }
     render();
