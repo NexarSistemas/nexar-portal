@@ -8,15 +8,20 @@ const phase6Expiry = [
   '20260914000700_fidelizacion_fase6_corrige_coalesce_caducidad.sql',
 ];
 const m07 = '20260914000701_m07_hardening_retiro_auth_legacy.sql';
-const driftReconciliation = '20260924225227_fidelizacion_corrige_coalesce_crear_earn.sql';
+const driftReconciliations = [
+  '20260924225227_fidelizacion_corrige_coalesce_crear_earn.sql',
+  '20260924232934_fidelizacion_corrige_coalesce_crear_redeem.sql',
+];
 
-test('el bootstrap corrige crear earn antes del gate M07', async () => {
+test('el bootstrap corrige crear earn y redeem antes del gate M07', async () => {
   const files = (await readdir(migrationsUrl)).sort();
   const m07Index = files.indexOf(m07);
 
   assert.ok(m07Index >= 0, 'M07 debe permanecer en la cadena de migraciones');
-  assert.ok(files.indexOf(driftReconciliation) > m07Index,
-    'la reconciliación forward-only debe conservarse para bases existentes con drift');
+  for (const migration of driftReconciliations) {
+    assert.ok(files.indexOf(migration) > m07Index,
+      `${migration} debe conservarse para bases existentes con drift`);
+  }
 
   for (const migration of phase6Expiry) {
     assert.ok(files.indexOf(migration) >= 0 && files.indexOf(migration) < m07Index,

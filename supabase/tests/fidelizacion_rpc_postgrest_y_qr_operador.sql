@@ -65,6 +65,7 @@ declare
 begin
   foreach v_helper in array array[
     'app_private.fidelizacion_crear_earn(uuid,bigint,text,timestamptz)'::regprocedure,
+    'app_private.fidelizacion_crear_redeem(uuid,text,timestamptz)'::regprocedure,
     'app_private.fidelizacion_buscar_cuenta_staff(text)'::regprocedure,
     'app_private.fidelizacion_obtener_saldo_cliente(uuid)'::regprocedure
   ] loop
