@@ -1,4 +1,6 @@
 -- Verifica el hardening de RPC de Fase 6 sobre una base ya migrada.
+\set ON_ERROR_STOP on
+
 begin;
 
 do $$
