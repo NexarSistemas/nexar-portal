@@ -14,6 +14,7 @@ import {
 } from './client-api.js';
 import {
   activeQrCode,
+  availableRedeemPoints,
   clientOperationText,
   createAttemptStore,
   pendingRedeems,
@@ -63,6 +64,7 @@ function renderLoading(text = 'Cargando tu programa de puntos…') {
 function render() {
   if (!state.account) return renderNoPrograms();
   const balance = state.balance;
+  const availableBalance = availableRedeemPoints(balance, state.operations);
   root.innerHTML = `
     <div class="fidelity-app fidelity-client-app">
       <header class="fidelity-header">
@@ -80,7 +82,8 @@ function render() {
           <div>
             <p class="fidelity-eyebrow">Tu saldo</p>
             <h1>${formatPoints(balance)} <span>puntos</span></h1>
-            <p>Disponible según tus movimientos confirmados.</p>
+            <p>Saldo confirmado según tus movimientos.</p>
+            <p><strong>Disponible para canjes: ${formatPoints(availableBalance)} puntos.</strong></p>
           </div>
           <button class="fidelity-button fidelity-button-light" id="refresh" type="button" ${state.loading ? 'disabled' : ''}>${state.loading ? 'Actualizando…' : 'Actualizar'}</button>
         </section>
@@ -91,7 +94,7 @@ function render() {
             <div class="fidelity-section-heading">
               <div><p class="fidelity-step">Beneficios</p><h2 id="rewards-title">Recompensas</h2></div>
             </div>
-            ${renderRewards(balance)}
+            ${renderRewards(availableBalance)}
           </section>
           <section class="fidelity-card" aria-labelledby="activity-title">
             <div class="fidelity-section-heading">

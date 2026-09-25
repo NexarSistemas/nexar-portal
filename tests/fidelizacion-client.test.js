@@ -14,6 +14,7 @@ import {
 } from '../src/fidelizacion/client-api.js';
 import {
   activeQrCode,
+  availableRedeemPoints,
   clientOperationText,
   createAttemptStore,
   createQrContext,
@@ -93,6 +94,17 @@ test('filtra canjes pendientes vigentes y presenta su próximo paso', () => {
   assert.equal(pendingRedeems(operations, now).length, 2);
   assert.match(clientOperationText(operations[0]), /QR del comercio/i);
   assert.match(clientOperationText(operations[1]), /confirmar el canje/i);
+});
+
+test('descuenta reservas vigentes del saldo disponible para canjes', () => {
+  const now = new Date('2026-09-24T12:00:00Z');
+  const operations = [
+    { tipo: 'redeem', estado: 'pending_customer', puntos: 100, expires_at: '2026-09-24T12:15:00Z' },
+    { tipo: 'redeem', estado: 'cancelled', puntos: 100, expires_at: '2026-09-24T12:15:00Z' },
+    { tipo: 'redeem', estado: 'pending_staff', puntos: 100, expires_at: '2026-09-24T11:59:00Z' },
+  ];
+  assert.equal(availableRedeemPoints(180, operations, now), 80);
+  assert.equal(availableRedeemPoints(180, operations, now) >= 100, false);
 });
 
 test('el registro Auth contempla confirmación de email sin inventar sesión', async () => {
