@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadClienteDetail, loadClientes, searchTerm } from '../src/dashboard/clientes.js';
+import { createRequestGuard, loadClienteDetail, loadClientes, searchTerm } from '../src/dashboard/clientes.js';
 import { renderClientes } from '../src/ui/clientes.js';
 import { renderShell } from '../src/ui/shell.js';
 
@@ -23,6 +23,45 @@ test('representa búsqueda sin resultados, loading, error y reintento', () => {
   assert.match(renderClientes({ status: 'error', items: [] }), /retry-clientes/);
   assert.match(renderClientes({ status: 'ready', items: [customer] }, { status: 'loading' }), /Cargando detalle del cliente/);
   assert.match(renderClientes({ status: 'ready', items: [customer] }, { status: 'error' }), /retry-client-detail/);
+});
+
+test('ignora respuestas tardías de búsquedas y detalles invalidados', async () => {
+  const deferred = () => {
+    let resolve;
+    return { promise: new Promise((done) => { resolve = done; }), resolve };
+  };
+  const searches = createRequestGuard();
+  let searchState = null;
+  const firstSearchResponse = deferred();
+  const firstSearch = searches.next();
+  const applySearch = async (request, response) => {
+    const result = await response;
+    if (searches.isCurrent(request)) searchState = result;
+  };
+  const firstSearchPending = applySearch(firstSearch, firstSearchResponse.promise);
+  const secondSearch = searches.next();
+  const secondSearchResponse = deferred();
+  const secondSearchPending = applySearch(secondSearch, secondSearchResponse.promise);
+  secondSearchResponse.resolve('nueva búsqueda');
+  firstSearchResponse.resolve('búsqueda anterior');
+  await Promise.all([firstSearchPending, secondSearchPending]);
+  assert.equal(searchState, 'nueva búsqueda');
+
+  const details = createRequestGuard();
+  let detailState = null;
+  const firstDetailResponse = deferred();
+  const firstDetail = details.next();
+  const applyDetail = async (request, response) => {
+    const result = await response;
+    if (details.isCurrent(request)) detailState = result;
+  };
+  const firstDetailPending = applyDetail(firstDetail, firstDetailResponse.promise);
+  const secondDetail = details.next();
+  details.next();
+  firstDetailResponse.resolve('detalle anterior');
+  await firstDetailPending;
+  assert.equal(detailState, null);
+  assert.equal(details.isCurrent(secondDetail), false);
 });
 
 test('carga detalle con ventas, pagos por venta_id y licencias exclusivamente por RPC', async () => {
@@ -53,11 +92,14 @@ test('carga detalle con ventas, pagos por venta_id y licencias exclusivamente po
   assert.match(html, /Ventas[\s\S]*Pagos[\s\S]*ABC-123/);
 });
 
-test('muestra navegación administrativa y no expone Clientes al vendedor', () => {
+test('muestra navegación administrativa también en mobile y no expone Clientes al vendedor', async () => {
   const root = { innerHTML: '', querySelector: () => ({ addEventListener() {} }), querySelectorAll: () => [] };
   renderShell(root, { rol: 'admin', nombre: 'Admin' }, async () => {}, null, null, 'clientes', { status: 'empty', items: [] }, {});
   assert.match(root.innerHTML, /data-admin-view="inicio"[\s\S]*Clientes/);
   assert.match(root.innerHTML, /No encontramos clientes/);
   renderShell(root, { rol: 'vendedor', nombre: 'Vendedor' }, async () => {});
   assert.doesNotMatch(root.innerHTML, /data-admin-view="clientes"|>Clientes</);
+  const css = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/styles/main.css', import.meta.url), 'utf8'));
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*\.sidebar nav\{display:flex;gap:6px\}/);
+  assert.doesNotMatch(css, /\.nav-label,\.sidebar nav\{\s*display:none/);
 });

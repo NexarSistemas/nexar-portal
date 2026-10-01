@@ -3,6 +3,14 @@ const SALE_FIELDS = 'id,fecha_venta,moneda,estado,importe_total';
 const PAYMENT_FIELDS = 'id,venta_id,monto,moneda,proveedor_origen,estado_proveedor,decision_administrativa,created_at';
 const CLIENT_LIST_LIMIT = 50;
 
+export function createRequestGuard() {
+  let current = 0;
+  return {
+    next() { current += 1; return current; },
+    isCurrent(request) { return request === current; },
+  };
+}
+
 export function searchTerm(value) {
   return String(value ?? '').trim().replace(/[,%_()]/g, '');
 }

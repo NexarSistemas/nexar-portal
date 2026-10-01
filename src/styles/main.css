@@ -347,11 +347,15 @@ button,input{
   .sidebar-brand .brand-logo{
     width:108px
   }
-  .nav-label,.sidebar nav{
+  .nav-label{
     display:none
   }
+  .sidebar nav{display:flex;gap:6px}
+  .sidebar nav .nav-item{padding:8px 10px;font-size:12px}
+  .sidebar nav .nav-item+.nav-item{margin-top:0}
   .sidebar-bottom{
-    margin:0
+    margin:0;
+    grid-column:1 / -1
   }
   .topbar{
     height:auto;

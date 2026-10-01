@@ -3,7 +3,7 @@ import { signIn, signOut, resolveProfile } from './auth/auth.js';
 import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { hasDashboardData, loadAdminDashboard } from './dashboard/admin.js';
-import { loadClienteDetail, loadClientes } from './dashboard/clientes.js';
+import { createRequestGuard, loadClienteDetail, loadClientes } from './dashboard/clientes.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
 
@@ -18,10 +18,14 @@ let profile = null;
 let dashboard = null;
 let adminView = 'inicio';
 let clientes = null;
+const clientesRequest = createRequestGuard();
+const detalleRequest = createRequestGuard();
 let resolving = false;
 let unsubscribe = null;
 
 function showLogin(message = '') {
+  clientesRequest.next();
+  detalleRequest.next();
   profile = null;
   dashboard = null;
   adminView = 'inicio';
@@ -50,6 +54,7 @@ function clientHandlers() {
     onNavigate(view) {
       if (profile?.rol !== 'admin') return;
       adminView = view;
+      if (view !== 'clientes') detalleRequest.next();
       if (view === 'clientes' && !clientes) void loadClients();
       showPortal();
     },
@@ -60,7 +65,7 @@ function clientHandlers() {
       if (cliente) void loadDetail(cliente);
     },
     onRetryDetail() { if (clientes?.selected) void loadDetail(clientes.selected); },
-    onCloseDetail() { clientes = { ...clientes, detail: null, selected: null }; showPortal(); },
+    onCloseDetail() { detalleRequest.next(); clientes = { ...clientes, detail: null, selected: null }; showPortal(); },
   };
 }
 
@@ -78,12 +83,16 @@ async function loadDashboard() {
 
 async function loadClients(query = '') {
   if (profile?.rol !== 'admin') return;
+  const request = clientesRequest.next();
+  detalleRequest.next();
   clientes = { ...clientes, status: 'loading', items: clientes?.items ?? [], query, detail: null, selected: null };
   showPortal();
   try {
     const items = await loadClientes(getSupabaseClient(), query);
+    if (!clientesRequest.isCurrent(request)) return;
     clientes = { status: items.length ? 'ready' : 'empty', items, query, detail: null, selected: null };
   } catch {
+    if (!clientesRequest.isCurrent(request)) return;
     clientes = { ...clientes, status: 'error', items: [], query };
   }
   if (profile?.rol === 'admin' && adminView === 'clientes') showPortal();
@@ -91,11 +100,15 @@ async function loadClients(query = '') {
 
 async function loadDetail(cliente) {
   if (profile?.rol !== 'admin') return;
+  const request = detalleRequest.next();
   clientes = { ...clientes, selected: cliente, detail: { status: 'loading' } };
   showPortal();
   try {
-    clientes = { ...clientes, selected: cliente, detail: { status: 'ready', data: await loadClienteDetail(getSupabaseClient(), cliente) } };
+    const data = await loadClienteDetail(getSupabaseClient(), cliente);
+    if (!detalleRequest.isCurrent(request)) return;
+    clientes = { ...clientes, selected: cliente, detail: { status: 'ready', data } };
   } catch {
+    if (!detalleRequest.isCurrent(request)) return;
     clientes = { ...clientes, selected: cliente, detail: { status: 'error' } };
   }
   if (profile?.rol === 'admin' && adminView === 'clientes') showPortal();
