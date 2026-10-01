@@ -258,6 +258,49 @@ button,input{
   color:var(--muted);
   font-size:12px
 }
+.dashboard-grid{
+  padding:8px 42px 42px;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:14px
+}
+.metric-card,.dashboard-status{
+  background:white;
+  border:1px solid var(--line);
+  border-radius:9px
+}
+.metric-card{
+  min-height:124px;
+  padding:20px
+}
+.metric-label{
+  margin:0;
+  color:var(--muted);
+  font-size:13px
+}
+.metric-value{
+  margin:16px 0 0;
+  color:var(--navy);
+  font-size:30px;
+  font-weight:700
+}
+.dashboard-status{
+  margin:8px 42px 42px;
+  padding:22px;
+  color:var(--muted)
+}
+.dashboard-status p{
+  margin:0
+}
+.dashboard-error{
+  color:#a03f3f
+}
+.secondary{
+  margin-top:14px;
+  padding:9px 12px;
+  background:#edf2f7;
+  color:var(--navy)
+}
 .loading{
   min-height:100vh;
   display:grid;
@@ -327,6 +370,14 @@ button,input{
     padding:4px 20px 28px;
     grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
     gap:10px
+  }
+  .dashboard-grid{
+    padding:4px 20px 28px;
+    grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
+    gap:10px
+  }
+  .dashboard-status{
+    margin:4px 20px 28px
   }
   .module-card{
     min-height:126px;

@@ -1,4 +1,5 @@
 import { NEXAR_LOGO_DATA_URI } from '../brand/assets.js';
+import { renderAdminDashboard } from './admin-dashboard.js';
 
 const roleNames = { admin: 'Administración', vendedor: 'Vendedor' };
 
@@ -42,7 +43,7 @@ export function renderLogin(root, { message = '', onSubmit }) {
   });
 }
 
-export function renderShell(root, profile, onLogout) {
+export function renderShell(root, profile, onLogout, dashboard = null, onRetryDashboard = null) {
   const admin = profile.rol === 'admin';
   const title = admin ? 'Nexar Portal — Administración' : 'Portal Vendedor';
   const sections = admin ? ['Vendedores', 'Clientes', 'Ventas', 'Licencias', 'Comisiones'] : ['Inicio'];
@@ -57,9 +58,9 @@ export function renderShell(root, profile, onLogout) {
       <main class="portal-main" id="inicio">
         <header class="topbar"><span class="topbar-role">${roleNames[profile.rol]}</span><div class="user-menu"><span>${escapeHtml(profile.nombre)}</span><button class="button quiet" id="logout" type="button">Cerrar sesión</button></div></header>
         <section class="welcome"><p class="eyebrow">${roleNames[profile.rol]}</p><h1>${title}</h1><p class="muted">Bienvenido/a, ${escapeHtml(profile.nombre)}.</p></section>
-        <section class="module-grid" aria-label="Secciones del portal">
+        ${admin ? renderAdminDashboard(dashboard) : `<section class="module-grid" aria-label="Secciones del portal">
           ${sections.map((section, index) => `<article class="module-card"><span class="module-index">0${index + 1}</span><h2>${section}</h2><p>Disponible próximamente</p></article>`).join('')}
-        </section>
+        </section>`}
       </main>
     </div>`;
   root.querySelector('#logout').addEventListener('click', async (event) => {
@@ -67,6 +68,7 @@ export function renderShell(root, profile, onLogout) {
     button.disabled = true;
     try { await onLogout(); } catch { button.disabled = false; }
   });
+  root.querySelector('#retry-dashboard')?.addEventListener('click', () => onRetryDashboard?.());
 }
 
 function escapeHtml(value) {
