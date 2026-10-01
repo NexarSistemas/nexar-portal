@@ -3,7 +3,7 @@ import { signIn, signOut, resolveProfile } from './auth/auth.js';
 import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { hasDashboardData, loadAdminDashboard } from './dashboard/admin.js';
-import { createRequestGuard, loadClienteDetail, loadClientes } from './dashboard/clientes.js';
+import { clearClienteDetail, createRequestGuard, loadClienteDetail, loadClientes } from './dashboard/clientes.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
 
@@ -54,7 +54,10 @@ function clientHandlers() {
     onNavigate(view) {
       if (profile?.rol !== 'admin') return;
       adminView = view;
-      if (view !== 'clientes') detalleRequest.next();
+      if (view !== 'clientes') {
+        detalleRequest.next();
+        clientes = clearClienteDetail(clientes);
+      }
       if (view === 'clientes' && !clientes) void loadClients();
       showPortal();
     },
@@ -65,7 +68,7 @@ function clientHandlers() {
       if (cliente) void loadDetail(cliente);
     },
     onRetryDetail() { if (clientes?.selected) void loadDetail(clientes.selected); },
-    onCloseDetail() { detalleRequest.next(); clientes = { ...clientes, detail: null, selected: null }; showPortal(); },
+    onCloseDetail() { detalleRequest.next(); clientes = clearClienteDetail(clientes); showPortal(); },
   };
 }
 

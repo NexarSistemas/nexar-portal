@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequestGuard, loadClienteDetail, loadClientes, searchTerm } from '../src/dashboard/clientes.js';
+import { clearClienteDetail, createRequestGuard, loadClienteDetail, loadClientes, searchTerm } from '../src/dashboard/clientes.js';
 import { renderClientes } from '../src/ui/clientes.js';
 import { renderShell } from '../src/ui/shell.js';
 
@@ -62,6 +62,29 @@ test('ignora respuestas tardías de búsquedas y detalles invalidados', async ()
   await firstDetailPending;
   assert.equal(detailState, null);
   assert.equal(details.isCurrent(secondDetail), false);
+});
+
+test('limpia detalle pendiente al salir de Clientes y no lo restaura al volver', async () => {
+  let resolve;
+  const pendingDetail = new Promise((done) => { resolve = done; });
+  const details = createRequestGuard();
+  let state = { status: 'ready', items: [customer], selected: customer, detail: { status: 'loading' } };
+  const request = details.next();
+  const applyDetail = async () => {
+    const data = await pendingDetail;
+    if (details.isCurrent(request)) state = { ...state, detail: { status: 'ready', data } };
+  };
+  const loading = applyDetail();
+
+  details.next();
+  state = clearClienteDetail(state);
+  resolve({ cliente: customer });
+  await loading;
+
+  assert.equal(state.selected, null);
+  assert.equal(state.detail, null);
+  const returnedToClients = renderClientes(state, state.detail);
+  assert.doesNotMatch(returnedToClients, /Cargando detalle del cliente|Ana Cliente<\/h2>/);
 });
 
 test('carga detalle con ventas, pagos por venta_id y licencias exclusivamente por RPC', async () => {

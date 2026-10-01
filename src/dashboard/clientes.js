@@ -11,6 +11,10 @@ export function createRequestGuard() {
   };
 }
 
+export function clearClienteDetail(clientes) {
+  return clientes ? { ...clientes, selected: null, detail: null } : clientes;
+}
+
 export function searchTerm(value) {
   return String(value ?? '').trim().replace(/[,%_()]/g, '');
 }
