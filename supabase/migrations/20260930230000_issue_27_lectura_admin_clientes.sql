@@ -74,10 +74,10 @@ begin
     from pg_policies
     where schemaname = 'public'
       and tablename = 'pagos'
-      and cmd = 'SELECT'
+      and cmd in ('SELECT', 'ALL')
   ) then
     raise exception using
-      message = 'Issue #27 requiere que public.pagos no tenga policies SELECT previas.',
+      message = 'Issue #27 requiere que public.pagos no tenga policies SELECT o ALL previas.',
       hint = 'Releve las policies legacy antes de habilitar pagos_admin_select; no se modifican automaticamente.';
   end if;
 

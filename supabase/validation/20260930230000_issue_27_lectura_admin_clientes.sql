@@ -38,9 +38,9 @@ select not exists (
   from pg_policies
   where schemaname = 'public'
     and tablename = 'pagos'
-    and cmd = 'SELECT'
+    and cmd in ('SELECT', 'ALL')
     and policyname <> 'pagos_admin_select'
-) as no_hay_policies_select_adicionales_en_pagos;
+) as no_hay_policies_select_o_all_adicionales_en_pagos;
 
 select
   has_table_privilege('authenticated', 'public.pagos', 'SELECT') as pagos_select_tabla_indebido,
