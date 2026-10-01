@@ -1,5 +1,6 @@
 import { NEXAR_LOGO_DATA_URI } from '../brand/assets.js';
 import { renderAdminDashboard } from './admin-dashboard.js';
+import { renderClientes } from './clientes.js';
 
 const roleNames = { admin: 'Administración', vendedor: 'Vendedor' };
 
@@ -43,7 +44,7 @@ export function renderLogin(root, { message = '', onSubmit }) {
   });
 }
 
-export function renderShell(root, profile, onLogout, dashboard = null, onRetryDashboard = null) {
+export function renderShell(root, profile, onLogout, dashboard = null, onRetryDashboard = null, adminView = 'inicio', clientes = null, handlers = {}) {
   const admin = profile.rol === 'admin';
   const title = admin ? 'Nexar Portal — Administración' : 'Portal Vendedor';
   const sections = admin ? ['Vendedores', 'Clientes', 'Ventas', 'Licencias', 'Comisiones'] : ['Inicio'];
@@ -52,15 +53,15 @@ export function renderShell(root, profile, onLogout, dashboard = null, onRetryDa
       <aside class="sidebar">
         <a class="brand-link sidebar-brand" href="#inicio" aria-label="Nexar Sistemas"><img class="brand-logo" src="${NEXAR_LOGO_DATA_URI}" alt="Nexar Sistemas" /></a>
         <p class="nav-label">ESPACIO DE TRABAJO</p>
-        <nav aria-label="Navegación principal"><a class="nav-item active" href="#inicio">Inicio</a></nav>
+        <nav aria-label="Navegación principal"><a class="nav-item ${adminView === 'inicio' ? 'active' : ''}" href="#inicio" data-admin-view="inicio">Inicio</a>${admin ? `<a class="nav-item ${adminView === 'clientes' ? 'active' : ''}" href="#clientes" data-admin-view="clientes">Clientes</a>` : ''}</nav>
         <div class="sidebar-bottom"><span class="role-pill">${roleNames[profile.rol]}</span></div>
       </aside>
-      <main class="portal-main" id="inicio">
+      <main class="portal-main" id="${admin ? adminView : 'inicio'}">
         <header class="topbar"><span class="topbar-role">${roleNames[profile.rol]}</span><div class="user-menu"><span>${escapeHtml(profile.nombre)}</span><button class="button quiet" id="logout" type="button">Cerrar sesión</button></div></header>
-        <section class="welcome"><p class="eyebrow">${roleNames[profile.rol]}</p><h1>${title}</h1><p class="muted">Bienvenido/a, ${escapeHtml(profile.nombre)}.</p></section>
+        ${admin && adminView === 'clientes' ? renderClientes(clientes, clientes?.detail) : `<section class="welcome"><p class="eyebrow">${roleNames[profile.rol]}</p><h1>${title}</h1><p class="muted">Bienvenido/a, ${escapeHtml(profile.nombre)}.</p></section>
         ${admin ? renderAdminDashboard(dashboard) : `<section class="module-grid" aria-label="Secciones del portal">
           ${sections.map((section, index) => `<article class="module-card"><span class="module-index">0${index + 1}</span><h2>${section}</h2><p>Disponible próximamente</p></article>`).join('')}
-        </section>`}
+        </section>`}`}
       </main>
     </div>`;
   root.querySelector('#logout').addEventListener('click', async (event) => {
@@ -69,6 +70,18 @@ export function renderShell(root, profile, onLogout, dashboard = null, onRetryDa
     try { await onLogout(); } catch { button.disabled = false; }
   });
   root.querySelector('#retry-dashboard')?.addEventListener('click', () => onRetryDashboard?.());
+  root.querySelectorAll?.('[data-admin-view]').forEach((link) => link.addEventListener('click', (event) => {
+    event.preventDefault();
+    handlers.onNavigate?.(event.currentTarget.dataset.adminView);
+  }));
+  root.querySelector('#client-search')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    handlers.onSearch?.(new FormData(event.currentTarget).get('query'));
+  });
+  root.querySelectorAll?.('[data-client-id]').forEach((button) => button.addEventListener('click', () => handlers.onSelect?.(button.dataset.clientId)));
+  root.querySelector('#retry-clientes')?.addEventListener('click', () => handlers.onRetryList?.());
+  root.querySelector('#retry-client-detail')?.addEventListener('click', () => handlers.onRetryDetail?.());
+  root.querySelector('#close-client-detail')?.addEventListener('click', () => handlers.onCloseDetail?.());
 }
 
 function escapeHtml(value) {

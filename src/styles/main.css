@@ -189,6 +189,8 @@ button,input{
   border-radius:6px;
   font-size:14px
 }
+.nav-item+.nav-item{margin-top:8px}
+.nav-item.active{background:#ffffff24}
 .sidebar-bottom{
   margin-top:auto
 }
@@ -292,6 +294,15 @@ button,input{
 .dashboard-status p{
   margin:0
 }
+.clients-page{padding:30px 42px 42px}
+.clients-header h1{font-size:29px;letter-spacing:-.04em;margin:0;color:var(--navy)}
+.clients-header .eyebrow{margin:0 0 10px}
+.clients-header .muted{margin:8px 0 24px}
+.client-search{max-width:680px;margin-bottom:20px}
+.client-search label{display:block;font-size:13px;font-weight:600;margin-bottom:7px}
+.client-search div{display:flex;gap:8px}.client-search input{flex:1;min-width:0;height:40px;padding:0 12px;border:1px solid #ced8e2;border-radius:7px;color:var(--navy)}
+.client-search .secondary{margin:0}.clients-layout{display:grid;grid-template-columns:minmax(280px,.8fr) minmax(340px,1.2fr);gap:18px;align-items:start}.clients-panel,.clients-detail{background:#fff;border:1px solid var(--line);border-radius:9px}.clients-panel h2{font-size:16px;margin:0;padding:18px 18px 12px}.clients-panel .dashboard-status,.clients-detail>.dashboard-status{margin:0;border:0;border-top:1px solid var(--line);border-radius:0}.client-row{width:100%;display:grid;gap:4px;padding:14px 18px;text-align:left;background:#fff;border:0;border-top:1px solid var(--line);cursor:pointer;color:var(--navy)}.client-row:hover{background:#f7fafd}.client-row span{font-size:12px;color:var(--muted)}
+.client-detail-content{padding:20px}.client-detail-title{display:flex;justify-content:space-between;gap:14px;align-items:start}.client-detail-title .eyebrow{margin:0 0 7px}.client-detail-title h2{font-size:21px;margin:0}.client-data{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:22px 0}.client-data div{padding:12px;background:#f7fafd;border-radius:7px}.client-data dt{font-size:11px;color:var(--muted);margin-bottom:4px}.client-data dd{margin:0;font-size:13px;overflow-wrap:anywhere}.relationship-section{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}.relationship-section h3{font-size:16px;margin:0 0 12px}.sale-card{padding:13px;border:1px solid var(--line);border-radius:7px;margin-top:10px}.sale-card p{margin:0 0 5px;font-size:13px}.sale-card h4{font-size:13px;margin:14px 0 6px}.payment-list,.license-list{padding-left:18px;margin:0}.payment-list li,.license-list li{margin:7px 0;font-size:13px}.payment-list small{display:block;color:var(--muted);margin-top:3px}
 .dashboard-error{
   color:#a03f3f
 }
@@ -379,6 +390,7 @@ button,input{
   .dashboard-status{
     margin:4px 20px 28px
   }
+  .clients-page{padding:24px 20px 28px}.clients-layout{grid-template-columns:1fr}.client-data{grid-template-columns:1fr}
   .module-card{
     min-height:126px;
     padding:16px
