@@ -1,7 +1,6 @@
 const ADMIN_METRICS = [
   { key: 'clientes', label: 'Clientes', table: 'clientes', column: 'id' },
   { key: 'ventas', label: 'Ventas', table: 'ventas', column: 'id' },
-  { key: 'pagos', label: 'Pagos', table: 'pagos', column: 'id' },
   { key: 'licencias', label: 'Licencias', table: 'licencias', column: 'license_key' },
   { key: 'vendedores', label: 'Vendedores', table: 'vendedores', column: 'id' },
   { key: 'comisiones', label: 'Comisiones', table: 'comisiones', column: 'tipo' },

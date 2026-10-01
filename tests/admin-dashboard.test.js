@@ -5,7 +5,7 @@ import { renderAdminDashboard } from '../src/ui/admin-dashboard.js';
 import { renderShell } from '../src/ui/shell.js';
 
 const expectedMetrics = [
-  ['clientes', 'id'], ['ventas', 'id'], ['pagos', 'id'], ['licencias', 'license_key'], ['vendedores', 'id'], ['comisiones', 'tipo'],
+  ['clientes', 'id'], ['ventas', 'id'], ['licencias', 'license_key'], ['vendedores', 'id'], ['comisiones', 'tipo'],
 ];
 
 test('carga los conteos visibles del dashboard administrativo', async () => {
