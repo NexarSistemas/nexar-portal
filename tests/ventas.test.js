@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { clearVentaDetail, createRequestGuard, currentPrices, loadVentaDetail, loadVentas, saveVenta, saleValues, validateSale, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard, currentPrices, loadVentaDetail, loadVentaFormData, loadVentas, saveVenta, saleValues, searchVentaClientes, validateSale, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
 import { renderVentas } from '../src/ui/ventas.js';
 import { renderShell } from '../src/ui/shell.js';
 
@@ -66,12 +66,50 @@ test('muestra solo el precio activo y vigente para la fecha de venta', () => {
 
 test('crea la venta exclusivamente mediante la RPC atómica con clave de idempotencia', async () => {
   const calls = [];
-  const client = { rpc(name, args) { calls.push([name, args]); return Promise.resolve({ data: sale, error: null }); } };
+  const client = { rpc(name, args) { calls.push([name, args]); return Promise.resolve({ data: [sale], error: null }); } };
   const created = await saveVenta(client, { cliente_id: 'cliente-1', vendedor_id: '', fecha_venta: '2026-10-02T10:00', moneda: 'ars', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: '2' }] }, '00000000-0000-4000-8000-000000000001');
   assert.equal(created, sale);
   assert.deepEqual(calls, [['crear_venta_manual', {
     p_cliente_id: 'cliente-1', p_vendedor_id: null, p_fecha_venta: '2026-10-02T10:00:00.000Z', p_moneda: 'ARS', p_items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }], p_idempotency_key: '00000000-0000-4000-8000-000000000001',
   }]]);
+});
+
+test('rechaza una respuesta RPC vacía antes de intentar abrir el detalle', async () => {
+  const client = { rpc() { return Promise.resolve({ data: [], error: null }); } };
+  await assert.rejects(
+    saveVenta(client, { cliente_id: 'cliente-1', fecha_venta: '2026-10-02T10:00', moneda: 'ARS', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 1 }] }, '00000000-0000-4000-8000-000000000002'),
+    /No se devolvió la venta creada/,
+  );
+});
+
+test('busca clientes de venta en servidor sin precargar un slice fijo', async () => {
+  const calls = [];
+  const customerBeyondFirstSlice = { id: 'cliente-51', nombre_completo: 'Zoe Cliente', email: 'zoe@example.com', numero_documento: '51' };
+  const request = {
+    order() { return this; },
+    limit(value) { calls.push(['limit', value]); return this; },
+    or(value) { calls.push(['or', value]); return Promise.resolve({ data: [customerBeyondFirstSlice], error: null }); },
+  };
+  const client = { from(table) { calls.push(['from', table]); return { select() { return request; } }; } };
+  const results = await searchVentaClientes(client, 'zoe@example.com');
+  assert.deepEqual(results, [customerBeyondFirstSlice]);
+  assert.equal(calls.find(([kind]) => kind === 'from')[1], 'clientes');
+  assert.match(calls.find(([kind]) => kind === 'or')[1], /zoe@example.com/);
+
+  const catalogCalls = [];
+  const catalogClient = {
+    from(table) {
+      catalogCalls.push(table);
+      const requestForTable = {
+        select() { return this; },
+        eq() { return this; },
+        order() { return Promise.resolve({ data: [], error: null }); },
+      };
+      return requestForTable;
+    },
+  };
+  await loadVentaFormData(catalogClient);
+  assert.equal(catalogCalls.includes('clientes'), false);
 });
 
 test('carga el detalle por IDs/FK y conserva los snapshots de venta_items', async () => {
@@ -124,8 +162,8 @@ test('representa loading, vacío, error y snapshots históricos de ventas', () =
   } });
   assert.match(html, /Producto histórico[\s\S]*Plan histórico[\s\S]*500/);
   assert.match(renderVentas({ status: 'ready', items: [sale], filters: {} }, { status: 'error' }), /retry-venta-detail/);
-  const form = renderVentas({ status: 'ready', items: [], filters: {}, form: { status: 'ready', values: { fecha_venta: '2026-10-02T10:00:00Z', moneda: 'ARS', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }] }, catalogo: { clientes: [{ id: 'cliente-1', nombre_completo: 'Ana' }], vendedores: [], productos: [{ id: 'producto-1', nombre: 'Comercio' }], planes: [{ id: 'plan-1', producto_id: 'producto-1', nombre: 'Mensual' }], precios: [{ id: 'precio-1', plan_id: 'plan-1', moneda: 'ARS', importe: 500, vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null }] } } });
-  assert.match(form, /Nueva venta[\s\S]*Crear cliente[\s\S]*Precio vigente[\s\S]*500/);
+  const form = renderVentas({ status: 'ready', items: [], filters: {}, form: { status: 'ready', values: { fecha_venta: '2026-10-02T10:00:00Z', moneda: 'ARS', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }] }, clientes: [{ id: 'cliente-51', nombre_completo: 'Zoe Cliente' }], catalogo: { vendedores: [], productos: [{ id: 'producto-1', nombre: 'Comercio' }], planes: [{ id: 'plan-1', producto_id: 'producto-1', nombre: 'Mensual' }], precios: [{ id: 'precio-1', plan_id: 'plan-1', moneda: 'ARS', importe: 500, vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null }] } } });
+  assert.match(form, /Nueva venta[\s\S]*Buscar cliente[\s\S]*Zoe Cliente[\s\S]*Crear cliente[\s\S]*Precio vigente[\s\S]*500/);
 });
 
 test('mantiene el detalle cancelable y la navegación de ventas solo para administración', async () => {
@@ -161,4 +199,6 @@ test('la migración de alta manual usa una RPC invoker, snapshots e idempotencia
   assert.match(source, /precio_id, descripcion, producto_nombre, plan_nombre, cantidad, precio_unitario, importe_total/);
   assert.doesNotMatch(source, /external_reference/);
   assert.match(validation, /authenticated_con_execute[\s\S]*anon_sin_execute/);
+  assert.match(source, /p_items is null[\s\S]*jsonb_typeof\(p_items\) <> 'array'[\s\S]*jsonb_array_length\(p_items\) = 0/);
+  assert.match(validation, /rechaza_items_sql_null[\s\S]*rechaza_json_no_array[\s\S]*rechaza_array_vacio/);
 });

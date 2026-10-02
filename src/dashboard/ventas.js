@@ -1,10 +1,11 @@
+import { loadClientes } from './clientes.js';
+
 const SALE_FIELDS = 'id,cliente_id,vendedor_id,fecha_venta,moneda,estado,importe_total';
 const CLIENT_FIELDS = 'id,nombre_completo,email,telefono,tipo_documento,numero_documento';
 const SELLER_FIELDS = 'id,codigo_vendedor,email,telefono';
 const ITEM_FIELDS = 'id,venta_id,producto_id,plan_id,precio_id,descripcion,producto_nombre,plan_nombre,cantidad,precio_unitario,importe_total';
 const PAYMENT_FIELDS = 'id,venta_id,monto,moneda,proveedor_origen,estado_proveedor,decision_administrativa,created_at';
 const SALE_LIST_LIMIT = 50;
-const FORM_CLIENT_FIELDS = 'id,nombre_completo,email,numero_documento';
 const FORM_SELLER_FIELDS = 'id,codigo_vendedor';
 const PRODUCT_FIELDS = 'id,nombre';
 const PLAN_FIELDS = 'id,producto_id,nombre';
@@ -47,16 +48,19 @@ export function currentPrices(prices, at) {
 }
 
 export async function loadVentaFormData(client) {
-  const clientsRequest = client.from('clientes').select(FORM_CLIENT_FIELDS).order('nombre_completo', { ascending: true }).limit(SALE_LIST_LIMIT);
   const sellersRequest = client.from('vendedores').select(FORM_SELLER_FIELDS).order('codigo_vendedor', { ascending: true });
   const productsRequest = client.from('productos').select(PRODUCT_FIELDS).eq('activo', true).order('nombre', { ascending: true });
   const plansRequest = client.from('planes').select(PLAN_FIELDS).eq('activo', true).order('nombre', { ascending: true });
   const pricesRequest = client.from('precios').select(PRICE_FIELDS).eq('estado', 'activo').order('vigente_desde', { ascending: false });
-  const results = await Promise.all([clientsRequest, sellersRequest, productsRequest, plansRequest, pricesRequest]);
+  const results = await Promise.all([sellersRequest, productsRequest, plansRequest, pricesRequest]);
   for (const result of results) if (result.error) throw result.error;
   return {
-    clientes: results[0].data ?? [], vendedores: results[1].data ?? [], productos: results[2].data ?? [], planes: results[3].data ?? [], precios: results[4].data ?? [],
+    vendedores: results[0].data ?? [], productos: results[1].data ?? [], planes: results[2].data ?? [], precios: results[3].data ?? [],
   };
+}
+
+export async function searchVentaClientes(client, query) {
+  return loadClientes(client, query);
 }
 
 export async function saveVenta(client, values, idempotencyKey) {
@@ -71,7 +75,9 @@ export async function saveVenta(client, values, idempotencyKey) {
     p_idempotency_key: idempotencyKey,
   });
   if (rpcError) throw rpcError;
-  return data;
+  const venta = Array.isArray(data) ? data[0] : data;
+  if (!venta) throw new Error('No se devolvió la venta creada.');
+  return venta;
 }
 
 export function createRequestGuard() {

@@ -4,7 +4,7 @@ import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { hasDashboardData, loadAdminDashboard } from './dashboard/admin.js';
 import { clearClienteDetail, clientValues, createRequestGuard, loadClienteDetail, loadClientes, saveCliente, validateClient } from './dashboard/clientes.js';
-import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, loadVentaDetail, loadVentaFormData, loadVentas, saveVenta, validateSale } from './dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, loadVentaDetail, loadVentaFormData, loadVentas, saveVenta, searchVentaClientes, validateSale } from './dashboard/ventas.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
 
@@ -27,6 +27,7 @@ const ventasRequest = createVentasRequestGuard();
 const ventaDetalleRequest = createVentasRequestGuard();
 const ventaFormRequest = createVentasRequestGuard();
 const ventaSaveRequest = createVentasRequestGuard();
+const ventaClientSearchRequest = createVentasRequestGuard();
 let resolving = false;
 let unsubscribe = null;
 
@@ -38,6 +39,7 @@ function showLogin(message = '') {
   ventaDetalleRequest.next();
   ventaFormRequest.next();
   ventaSaveRequest.next();
+  ventaClientSearchRequest.next();
   profile = null;
   dashboard = null;
   adminView = 'inicio';
@@ -77,6 +79,7 @@ function clientHandlers() {
         ventaDetalleRequest.next();
         ventaFormRequest.next();
         ventaSaveRequest.next();
+        ventaClientSearchRequest.next();
         ventas = { ...clearVentaDetail(ventas), form: null };
       }
       if (view === 'clientes' && !clientes) void loadClients();
@@ -125,10 +128,11 @@ function clientHandlers() {
     onRetrySaleDetail() { if (ventas?.selected) void loadSaleDetail(ventas.selected); },
     onCloseSaleDetail() { ventaDetalleRequest.next(); ventas = clearVentaDetail(ventas); showPortal(); },
     onCreateSale() { void createSaleForm(); },
-    onCancelSaleForm() { ventaFormRequest.next(); ventaSaveRequest.next(); ventas = { ...ventas, form: null }; showPortal(); },
+    onCancelSaleForm() { ventaFormRequest.next(); ventaSaveRequest.next(); ventaClientSearchRequest.next(); ventas = { ...ventas, form: null }; showPortal(); },
     onCreateClientFromSale() {
       ventaFormRequest.next();
       ventaSaveRequest.next();
+      ventaClientSearchRequest.next();
       adminView = 'clientes';
       clientesRequest.next();
       detalleRequest.next();
@@ -161,6 +165,7 @@ function clientHandlers() {
       ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, [field]: value } } };
       showPortal();
     },
+    onSearchSaleClients(query) { void searchSaleClients(query); },
     onSaveSale(values) { void saveSale(values); },
   };
 }
@@ -275,15 +280,32 @@ async function createSaleForm() {
   ventaSaveRequest.next();
   const request = ventaFormRequest.next();
   const values = { cliente_id: '', vendedor_id: '', fecha_venta: new Date().toISOString(), moneda: 'ARS', items: [{}] };
-  ventas = { ...ventas, selected: null, detail: null, form: { values, catalogo: {}, status: 'loading', error: '' }, notice: '' };
+  ventas = { ...ventas, selected: null, detail: null, form: { values, catalogo: {}, clientes: [], clientQuery: '', status: 'loading', error: '' }, notice: '' };
   showPortal();
   try {
     const catalogo = await loadVentaFormData(getSupabaseClient());
     if (!ventaFormRequest.isCurrent(request)) return;
-    ventas = { ...ventas, form: { values, catalogo, status: 'ready', error: '', idempotencyKey: crypto.randomUUID() } };
+    ventas = { ...ventas, form: { values, catalogo, clientes: [], clientQuery: '', status: 'ready', error: '', idempotencyKey: crypto.randomUUID() } };
   } catch {
     if (!ventaFormRequest.isCurrent(request)) return;
-    ventas = { ...ventas, form: { values, catalogo: {}, status: 'ready', error: 'No pudimos cargar los datos para crear la venta.' } };
+    ventas = { ...ventas, form: { values, catalogo: {}, clientes: [], clientQuery: '', status: 'ready', error: 'No pudimos cargar los datos para crear la venta.' } };
+  }
+  if (profile?.rol === 'admin' && adminView === 'ventas') showPortal();
+}
+
+async function searchSaleClients(query) {
+  if (profile?.rol !== 'admin' || !ventas?.form || ventas.form.status !== 'ready') return;
+  const request = ventaClientSearchRequest.next();
+  const form = ventas.form;
+  ventas = { ...ventas, form: { ...form, clientQuery: query, clientSearchStatus: 'loading', clientSearchError: '' } };
+  showPortal();
+  try {
+    const clientesEncontrados = await searchVentaClientes(getSupabaseClient(), query);
+    if (!ventaClientSearchRequest.isCurrent(request)) return;
+    ventas = { ...ventas, form: { ...ventas.form, clientQuery: query, clientes: clientesEncontrados, clientSearchStatus: clientesEncontrados.length ? 'ready' : 'empty', clientSearchError: '' } };
+  } catch {
+    if (!ventaClientSearchRequest.isCurrent(request)) return;
+    ventas = { ...ventas, form: { ...ventas.form, clientQuery: query, clientSearchStatus: 'error', clientSearchError: 'No pudimos buscar clientes. Intentá nuevamente.' } };
   }
   if (profile?.rol === 'admin' && adminView === 'ventas') showPortal();
 }

@@ -109,6 +109,12 @@ export function renderShell(root, profile, onLogout, dashboard = null, onRetryDa
     event.preventDefault();
     handlers.onSaveSale?.(Object.fromEntries(new FormData(event.currentTarget)));
   });
+  root.querySelector('#search-sale-clients')?.addEventListener('click', () => handlers.onSearchSaleClients?.(root.querySelector('#sale-client-query')?.value || ''));
+  root.querySelector('#sale-client-query')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    handlers.onSearchSaleClients?.(event.currentTarget.value);
+  });
   root.querySelectorAll?.('#sale-client,#sale-seller,#sale-date,#sale-currency').forEach((field) => field.addEventListener('change', () => handlers.onChangeSaleField?.(field.name, field.value)));
 }
 

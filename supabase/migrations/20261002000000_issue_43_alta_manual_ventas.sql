@@ -41,7 +41,7 @@ begin
   if v_moneda is null or v_moneda !~ '^[A-Z]{3}$' then
     raise exception using errcode = '22023', message = 'La moneda debe usar un código ISO de tres letras.';
   end if;
-  if pg_catalog.jsonb_typeof(p_items) <> 'array' or pg_catalog.jsonb_array_length(p_items) = 0 then
+  if p_items is null or pg_catalog.jsonb_typeof(p_items) <> 'array' or pg_catalog.jsonb_array_length(p_items) = 0 then
     raise exception using errcode = '22023', message = 'La venta requiere al menos un ítem.';
   end if;
 
