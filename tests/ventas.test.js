@@ -102,6 +102,26 @@ test('invalida una búsqueda de cliente pendiente al guardar y conserva el detal
   assert.match(source, /ventaClientSearchRequest\.next\(\);\n  const request = ventaSaveRequest\.next\(\);/);
 });
 
+test('restablece la búsqueda invalidada si falla el guardado y permite una nueva', async () => {
+  const searches = createRequestGuard();
+  const pendingSearch = searches.next();
+  let form = { status: 'ready', clientSearchStatus: 'loading', clientSearchError: '', clientes: [{ id: 'cliente-1' }] };
+
+  searches.next();
+  form = { ...form, status: 'ready', error: 'No pudimos guardar la venta.', clientSearchStatus: 'ready', clientSearchError: '' };
+
+  if (searches.isCurrent(pendingSearch)) form = { ...form, clientes: [{ id: 'cliente-tardío' }], clientSearchStatus: 'ready' };
+  assert.equal(form.clientSearchStatus, 'ready');
+  assert.equal(form.clientes[0].id, 'cliente-1');
+
+  const newSearch = searches.next();
+  if (searches.isCurrent(newSearch)) form = { ...form, clientes: [{ id: 'cliente-nuevo' }], clientSearchStatus: 'ready' };
+  assert.equal(form.clientes[0].id, 'cliente-nuevo');
+
+  const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
+  assert.match(source, /error: 'No pudimos guardar la venta\. Revisá los datos e intentá nuevamente\.', clientSearchStatus: 'ready', clientSearchError: ''/);
+});
+
 test('busca clientes de venta en servidor sin precargar un slice fijo', async () => {
   const calls = [];
   const customerBeyondFirstSlice = { id: 'cliente-51', nombre_completo: 'Zoe Cliente', email: 'zoe@example.com', numero_documento: '51' };

@@ -333,7 +333,7 @@ async function saveSale(values) {
     void loadSaleDetail(created);
   } catch {
     if (!ventaSaveRequest.isCurrent(request)) return;
-    ventas = { ...ventas, form: { ...form, values: input, status: 'ready', error: 'No pudimos guardar la venta. Revisá los datos e intentá nuevamente.' } };
+    ventas = { ...ventas, form: { ...form, values: input, status: 'ready', error: 'No pudimos guardar la venta. Revisá los datos e intentá nuevamente.', clientSearchStatus: 'ready', clientSearchError: '' } };
     showPortal();
   }
 }
