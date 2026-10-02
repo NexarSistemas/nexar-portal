@@ -4,7 +4,7 @@ import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { hasDashboardData, loadAdminDashboard } from './dashboard/admin.js';
 import { clearClienteDetail, clientValues, createRequestGuard, loadClienteDetail, loadClientes, saveCliente, validateClient } from './dashboard/clientes.js';
-import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, loadVentaDetail, loadVentas } from './dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, eligibleSaleCatalog, loadVentaDetail, loadVentaFormData, loadVentas, newSaleItem, restoreSaleFormAfterSaveFailure, saleMatchesFilters, saveVenta, searchVentaClientes, selectedSaleClient, validateSale } from './dashboard/ventas.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
 
@@ -25,6 +25,9 @@ const detalleRequest = createRequestGuard();
 const clienteSaveRequest = createRequestGuard();
 const ventasRequest = createVentasRequestGuard();
 const ventaDetalleRequest = createVentasRequestGuard();
+const ventaFormRequest = createVentasRequestGuard();
+const ventaSaveRequest = createVentasRequestGuard();
+const ventaClientSearchRequest = createVentasRequestGuard();
 let resolving = false;
 let unsubscribe = null;
 
@@ -34,6 +37,9 @@ function showLogin(message = '') {
   clienteSaveRequest.next();
   ventasRequest.next();
   ventaDetalleRequest.next();
+  ventaFormRequest.next();
+  ventaSaveRequest.next();
+  ventaClientSearchRequest.next();
   profile = null;
   dashboard = null;
   adminView = 'inicio';
@@ -71,7 +77,10 @@ function clientHandlers() {
       }
       if (view !== 'ventas') {
         ventaDetalleRequest.next();
-        ventas = clearVentaDetail(ventas);
+        ventaFormRequest.next();
+        ventaSaveRequest.next();
+        ventaClientSearchRequest.next();
+        ventas = { ...clearVentaDetail(ventas), form: null };
       }
       if (view === 'clientes' && !clientes) void loadClients();
       if (view === 'ventas' && !ventas) void loadSales();
@@ -118,6 +127,58 @@ function clientHandlers() {
     },
     onRetrySaleDetail() { if (ventas?.selected) void loadSaleDetail(ventas.selected); },
     onCloseSaleDetail() { ventaDetalleRequest.next(); ventas = clearVentaDetail(ventas); showPortal(); },
+    onCreateSale() { void createSaleForm(); },
+    onCancelSaleForm() { ventaFormRequest.next(); ventaSaveRequest.next(); ventaClientSearchRequest.next(); ventas = { ...ventas, form: null }; showPortal(); },
+    onCreateClientFromSale() {
+      ventaFormRequest.next();
+      ventaSaveRequest.next();
+      ventaClientSearchRequest.next();
+      adminView = 'clientes';
+      clientesRequest.next();
+      detalleRequest.next();
+      clienteSaveRequest.next();
+      clientes = { ...clientes, selected: null, detail: null, form: { id: null, values: {}, status: 'ready', error: '' }, notice: '' };
+      showPortal();
+    },
+    onAddSaleItem() {
+      if (!ventas?.form || ventas.form.status === 'saving') return;
+      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, items: [...(ventas.form.values.items ?? []), newSaleItem()] } } };
+      showPortal();
+    },
+    onRemoveSaleItem(index) {
+      if (!ventas?.form || ventas.form.status === 'saving') return;
+      const items = (ventas.form.values.items ?? []).filter((_, itemIndex) => itemIndex !== index);
+      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, items } } };
+      showPortal();
+    },
+    onChangeSaleItem(index, field, value) {
+      if (!ventas?.form || ventas.form.status === 'saving') return;
+      const items = [...(ventas.form.values.items ?? [])];
+      const item = { ...items[index], [field]: value };
+      if (field === 'producto_id') item.plan_id = null;
+      items[index] = item;
+      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, items } } };
+      showPortal();
+    },
+    onChangeSaleField(field, value) {
+      if (!ventas?.form || ventas.form.status === 'saving') return;
+      const selectedClient = field === 'cliente_id'
+        ? selectedSaleClient(ventas.form, value)
+        : ventas.form.selectedClient;
+      const values = { ...ventas.form.values, [field]: value };
+      if (field === 'fecha_venta' || field === 'moneda') {
+        const { planes } = eligibleSaleCatalog(ventas.form.catalogo, values);
+        values.items = (values.items ?? []).map((item) => (
+          planes.some((plan) => plan.id === item.plan_id && plan.producto_id === item.producto_id)
+            ? item
+            : { ...item, plan_id: null }
+        ));
+      }
+      ventas = { ...ventas, form: { ...ventas.form, values, selectedClient } };
+      showPortal();
+    },
+    onSearchSaleClients(query) { void searchSaleClients(query); },
+    onSaveSale(values) { void saveSale(values); },
   };
 }
 
@@ -223,6 +284,72 @@ async function loadSaleDetail(venta) {
     ventas = { ...ventas, selected: venta, detail: { status: 'error' } };
   }
   if (profile?.rol === 'admin' && adminView === 'ventas') showPortal();
+}
+
+async function createSaleForm() {
+  if (profile?.rol !== 'admin') return;
+  ventaDetalleRequest.next();
+  ventaSaveRequest.next();
+  const request = ventaFormRequest.next();
+  const values = { cliente_id: '', vendedor_id: '', fecha_venta: new Date().toISOString(), moneda: 'ARS', items: [newSaleItem()] };
+  ventas = { ...ventas, selected: null, detail: null, form: { values, catalogo: {}, clientes: [], selectedClient: null, clientQuery: '', status: 'loading', error: '' }, notice: '' };
+  showPortal();
+  try {
+    const catalogo = await loadVentaFormData(getSupabaseClient());
+    if (!ventaFormRequest.isCurrent(request)) return;
+    ventas = { ...ventas, form: { values, catalogo, clientes: [], selectedClient: null, clientQuery: '', status: 'ready', error: '', idempotencyKey: crypto.randomUUID() } };
+  } catch {
+    if (!ventaFormRequest.isCurrent(request)) return;
+    ventas = { ...ventas, form: { values, catalogo: {}, clientes: [], selectedClient: null, clientQuery: '', status: 'ready', error: 'No pudimos cargar los datos para crear la venta.' } };
+  }
+  if (profile?.rol === 'admin' && adminView === 'ventas') showPortal();
+}
+
+async function searchSaleClients(query) {
+  if (profile?.rol !== 'admin' || !ventas?.form || ventas.form.status !== 'ready') return;
+  const request = ventaClientSearchRequest.next();
+  const form = ventas.form;
+  ventas = { ...ventas, form: { ...form, clientQuery: query, clientSearchStatus: 'loading', clientSearchError: '' } };
+  showPortal();
+  try {
+    const clientesEncontrados = await searchVentaClientes(getSupabaseClient(), query);
+    if (!ventaClientSearchRequest.isCurrent(request)) return;
+    ventas = { ...ventas, form: { ...ventas.form, clientQuery: query, clientes: clientesEncontrados, clientSearchStatus: clientesEncontrados.length ? 'ready' : 'empty', clientSearchError: '' } };
+  } catch {
+    if (!ventaClientSearchRequest.isCurrent(request)) return;
+    ventas = { ...ventas, form: { ...ventas.form, clientQuery: query, clientSearchStatus: 'error', clientSearchError: 'No pudimos buscar clientes. Intentá nuevamente.' } };
+  }
+  if (profile?.rol === 'admin' && adminView === 'ventas') showPortal();
+}
+
+async function saveSale(values) {
+  if (profile?.rol !== 'admin' || !ventas?.form || ventas.form.status !== 'ready') return;
+  const form = ventas.form;
+  const input = { ...values, items: form.values.items };
+  const validation = validateSale(input);
+  if (validation.error) {
+    ventas = { ...ventas, form: { ...form, values: input, error: validation.error } };
+    showPortal();
+    return;
+  }
+  ventaClientSearchRequest.next();
+  const request = ventaSaveRequest.next();
+  ventas = { ...ventas, form: { ...form, values: input, status: 'saving', error: '' } };
+  showPortal();
+  try {
+    const created = await saveVenta(getSupabaseClient(), validation.sale, form.idempotencyKey);
+    if (!ventaSaveRequest.isCurrent(request)) return;
+    const items = saleMatchesFilters(created, ventas.filters)
+      ? [created, ...(ventas.items ?? []).filter((item) => item.id !== created.id)]
+      : ventas.items ?? [];
+    ventas = { ...ventas, status: items.length ? 'ready' : 'empty', items, form: null, selected: created, detail: { status: 'loading' }, notice: 'La venta se creó correctamente.' };
+    showPortal();
+    void loadSaleDetail(created);
+  } catch {
+    if (!ventaSaveRequest.isCurrent(request)) return;
+    ventas = { ...ventas, form: restoreSaleFormAfterSaveFailure(form, input) };
+    showPortal();
+  }
 }
 
 async function handleAuthUser(user) {

@@ -1,0 +1,31 @@
+-- Solo lectura: contrato de alta manual atómica e idempotente del Issue #43.
+
+select attname, atttypid::regtype as tipo, attnotnull
+from pg_attribute
+where attrelid = 'public.ventas'::regclass
+  and attname = 'manual_idempotency_key'
+  and not attisdropped;
+
+select conname, contype, pg_get_constraintdef(oid) as definicion
+from pg_constraint
+where conrelid = 'public.ventas'::regclass
+  and conname = 'ventas_manual_idempotency_key_key';
+
+select p.prosecdef as security_definer,
+  coalesce(p.proconfig @> array['search_path='] or p.proconfig @> array['search_path=""'], false) as search_path_vacio,
+  has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_con_execute,
+  not has_function_privilege('anon', p.oid, 'EXECUTE') as anon_sin_execute,
+  not has_function_privilege('public', p.oid, 'EXECUTE') as public_sin_execute
+from pg_proc p
+where p.oid = to_regprocedure('public.crear_venta_manual(uuid,uuid,timestamp with time zone,text,jsonb,uuid)');
+
+select pg_get_functiondef(p.oid) like '%p_items is null%' as rechaza_items_sql_null,
+  pg_get_functiondef(p.oid) like '%jsonb_typeof(p_items) <> ''array''%' as rechaza_json_no_array,
+  pg_get_functiondef(p.oid) like '%jsonb_array_length(p_items) = 0%' as rechaza_array_vacio
+from pg_proc p
+where p.oid = to_regprocedure('public.crear_venta_manual(uuid,uuid,timestamp with time zone,text,jsonb,uuid)');
+
+select pg_catalog.regexp_count(pg_get_functiondef(p.oid), 'select \* into v_precio') = 1 as precio_resuelto_una_vez_por_item,
+  pg_get_functiondef(p.oid) like '%jsonb_array_elements(v_items_resueltos)%' as snapshots_reutilizados_para_insertar
+from pg_proc p
+where p.oid = to_regprocedure('public.crear_venta_manual(uuid,uuid,timestamp with time zone,text,jsonb,uuid)');

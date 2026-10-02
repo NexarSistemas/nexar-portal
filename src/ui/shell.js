@@ -99,6 +99,23 @@ export function renderShell(root, profile, onLogout, dashboard = null, onRetryDa
   root.querySelector('#retry-ventas')?.addEventListener('click', () => handlers.onRetrySales?.());
   root.querySelector('#retry-venta-detail')?.addEventListener('click', () => handlers.onRetrySaleDetail?.());
   root.querySelector('#close-venta-detail')?.addEventListener('click', () => handlers.onCloseSaleDetail?.());
+  root.querySelector('#new-sale')?.addEventListener('click', () => handlers.onCreateSale?.());
+  root.querySelector('#cancel-sale-form')?.addEventListener('click', () => handlers.onCancelSaleForm?.());
+  root.querySelector('#create-client-from-sale')?.addEventListener('click', () => handlers.onCreateClientFromSale?.());
+  root.querySelector('#add-sale-item')?.addEventListener('click', () => handlers.onAddSaleItem?.());
+  root.querySelectorAll?.('[data-remove-sale-item]').forEach((button) => button.addEventListener('click', () => handlers.onRemoveSaleItem?.(Number(button.dataset.removeSaleItem))));
+  root.querySelectorAll?.('[data-sale-item-field]').forEach((field) => field.addEventListener('change', () => handlers.onChangeSaleItem?.(Number(field.dataset.saleItem), field.dataset.saleItemField, field.value)));
+  root.querySelector('#sale-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    handlers.onSaveSale?.(Object.fromEntries(new FormData(event.currentTarget)));
+  });
+  root.querySelector('#search-sale-clients')?.addEventListener('click', () => handlers.onSearchSaleClients?.(root.querySelector('#sale-client-query')?.value || ''));
+  root.querySelector('#sale-client-query')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    handlers.onSearchSaleClients?.(event.currentTarget.value);
+  });
+  root.querySelectorAll?.('#sale-client,#sale-seller,#sale-date,#sale-currency').forEach((field) => field.addEventListener('change', () => handlers.onChangeSaleField?.(field.name, field.value)));
 }
 
 function escapeHtml(value) {
