@@ -28,11 +28,12 @@ export function renderClientes(clientes, detail) {
     <div class="clients-list" aria-label="Resultados de clientes">
       ${listing.items.map((cliente) => `<button class="client-row" type="button" data-client-id="${escapeHtml(cliente.id)}"><strong>${escapeHtml(cliente.nombre_completo)}</strong><span>${escapeHtml(cliente.email || 'Sin email')}</span><span>${escapeHtml(clientDocument(cliente))}</span></button>`).join('')}
     </div>` : listStatus;
-  const detailContent = detail?.status === 'ready' ? renderClientDetail(detail.data) : renderStatus(detail, 'Cargando detalle del cliente…', '', 'No pudimos cargar el detalle del cliente.', 'retry-client-detail');
+  const detailContent = listing.form ? renderClientForm(listing.form) : detail?.status === 'ready' ? renderClientDetail(detail.data) : renderStatus(detail, 'Cargando detalle del cliente…', '', 'No pudimos cargar el detalle del cliente.', 'retry-client-detail');
 
   return `
     <section class="clients-page">
-      <div class="clients-header"><div><p class="eyebrow">Administración</p><h1>Clientes</h1><p class="muted">Consultá información operativa de clientes y sus relaciones canónicas.</p></div></div>
+      <div class="clients-header"><div><p class="eyebrow">Administración</p><h1>Clientes</h1><p class="muted">Consultá información operativa de clientes y sus relaciones canónicas.</p></div><button class="button primary" id="new-client" type="button">Nuevo cliente</button></div>
+      ${listing.notice ? `<p class="client-notice" role="status" aria-live="polite">${escapeHtml(listing.notice)}</p>` : ''}
       <form class="client-search" id="client-search"><label for="client-query">Buscar clientes</label><div><input id="client-query" name="query" type="search" value="${escapeHtml(listing.query || '')}" placeholder="Nombre, email o documento" /><button class="button secondary" type="submit">Buscar</button></div></form>
       <div class="clients-layout"><section class="clients-panel"><h2>Resultados</h2>${list}</section><section class="clients-detail" aria-live="polite">${detailContent || '<div class="dashboard-status"><p>Seleccioná un cliente para ver su detalle.</p></div>'}</section></div>
     </section>`;
@@ -41,10 +42,27 @@ export function renderClientes(clientes, detail) {
 function renderClientDetail({ cliente, ventas, pagos, licencias }) {
   const paymentsBySale = new Map(ventas.map(({ id }) => [id, []]));
   pagos.forEach((pago) => paymentsBySale.get(pago.venta_id)?.push(pago));
-  return `<div class="client-detail-content"><div class="client-detail-title"><div><p class="eyebrow">Cliente</p><h2>${escapeHtml(cliente.nombre_completo)}</h2></div><button class="button quiet" id="close-client-detail" type="button">Cerrar</button></div>
-    <dl class="client-data"><div><dt>Email</dt><dd>${escapeHtml(cliente.email || '—')}</dd></div><div><dt>Teléfono</dt><dd>${escapeHtml(cliente.telefono || '—')}</dd></div><div><dt>Documento</dt><dd>${escapeHtml(clientDocument(cliente))}</dd></div><div><dt>Alta</dt><dd>${date(cliente.created_at)}</dd></div></dl>
+  return `<div class="client-detail-content"><div class="client-detail-title"><div><p class="eyebrow">Cliente</p><h2>${escapeHtml(cliente.nombre_completo)}</h2></div><div class="client-detail-actions"><button class="button secondary" id="edit-client" type="button">Editar</button><button class="button quiet" id="close-client-detail" type="button">Cerrar</button></div></div>
+    <dl class="client-data"><div><dt>Email</dt><dd>${escapeHtml(cliente.email || '—')}</dd></div><div><dt>Teléfono</dt><dd>${escapeHtml(cliente.telefono || '—')}</dd></div><div><dt>Documento</dt><dd>${escapeHtml(clientDocument(cliente))}</dd></div><div><dt>Alta</dt><dd>${date(cliente.created_at)}</dd></div><div class="client-id"><dt>Identidad estable</dt><dd><code>${escapeHtml(cliente.id)}</code></dd></div></dl>
     <section class="relationship-section"><h3>Ventas</h3>${ventas.length ? ventas.map((venta) => `<article class="sale-card"><p><strong>${date(venta.fecha_venta)}</strong> · ${escapeHtml(venta.estado)}</p><p>${money(venta.importe_total, venta.moneda)}</p><h4>Pagos</h4>${renderPayments(paymentsBySale.get(venta.id))}</article>`).join('') : '<p class="muted">No hay ventas vinculadas.</p>'}</section>
     <section class="relationship-section"><h3>Licencias</h3>${licencias.length ? `<ul class="license-list">${licencias.map((licencia) => `<li><code>${escapeHtml(licencia.license_key)}</code></li>`).join('')}</ul>` : '<p class="muted">No hay licencias vinculadas.</p>'}</section>
+  </div>`;
+}
+
+function renderClientForm(form) {
+  const values = form.values ?? {};
+  const saving = form.status === 'saving';
+  const editing = Boolean(form.id);
+  return `<div class="client-detail-content"><div class="client-detail-title"><div><p class="eyebrow">Cliente</p><h2>${editing ? 'Editar cliente' : 'Nuevo cliente'}</h2></div><button class="button quiet" id="cancel-client-form" type="button" ${saving ? 'disabled' : ''}>Cancelar</button></div>
+    <form id="client-form" class="client-form">
+      <label for="client-name">Nombre completo<input id="client-name" name="nombre_completo" value="${escapeHtml(values.nombre_completo || '')}" required ${saving ? 'disabled' : ''} /></label>
+      <label for="client-email">Email<input id="client-email" name="email" type="email" value="${escapeHtml(values.email || '')}" ${saving ? 'disabled' : ''} /></label>
+      <label for="client-phone">Teléfono<input id="client-phone" name="telefono" type="tel" value="${escapeHtml(values.telefono || '')}" ${saving ? 'disabled' : ''} /></label>
+      <div class="client-document-fields"><label for="client-document-type">Tipo de documento<input id="client-document-type" name="tipo_documento" value="${escapeHtml(values.tipo_documento || '')}" ${saving ? 'disabled' : ''} /></label><label for="client-document-number">Número de documento<input id="client-document-number" name="numero_documento" value="${escapeHtml(values.numero_documento || '')}" ${saving ? 'disabled' : ''} /></label></div>
+      <p class="muted client-form-help">El tipo y número de documento deben completarse juntos.</p>
+      ${form.error ? `<p class="client-form-error" role="alert">${escapeHtml(form.error)}</p>` : ''}
+      <button class="button primary" type="submit" ${saving ? 'disabled' : ''}>${saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear cliente'}</button>
+    </form>
   </div>`;
 }
 

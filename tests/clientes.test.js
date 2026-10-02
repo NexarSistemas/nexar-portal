@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clearClienteDetail, createRequestGuard, loadClienteDetail, loadClientes, searchTerm } from '../src/dashboard/clientes.js';
+import { clearClienteDetail, clientValues, createRequestGuard, loadClienteDetail, loadClientes, saveCliente, searchTerm, validateClient } from '../src/dashboard/clientes.js';
 import { renderClientes } from '../src/ui/clientes.js';
 import { renderShell } from '../src/ui/shell.js';
 
@@ -23,6 +23,51 @@ test('representa búsqueda sin resultados, loading, error y reintento', () => {
   assert.match(renderClientes({ status: 'error', items: [] }), /retry-clientes/);
   assert.match(renderClientes({ status: 'ready', items: [customer] }, { status: 'loading' }), /Cargando detalle del cliente/);
   assert.match(renderClientes({ status: 'ready', items: [customer] }, { status: 'error' }), /retry-client-detail/);
+});
+
+test('normaliza y valida únicamente los campos canónicos editables del cliente', () => {
+  assert.deepEqual(clientValues({ nombre_completo: ' Ana ', email: ' ana@example.com ', telefono: ' 264 ', tipo_documento: ' DNI ', numero_documento: ' 123 ' }), {
+    nombre_completo: 'Ana', email: 'ana@example.com', telefono: '264', tipo_documento: 'DNI', numero_documento: '123',
+  });
+  assert.equal(validateClient({ nombre_completo: ' ' }).error, 'Indicá el nombre completo del cliente.');
+  assert.match(validateClient({ nombre_completo: 'Ana', tipo_documento: 'DNI' }).error, /tipo y número/i);
+  assert.equal(validateClient({ nombre_completo: 'Ana', tipo_documento: '', numero_documento: '' }).error, '');
+});
+
+test('crea y edita clientes con el UUID estable y sin campos no permitidos', async () => {
+  const calls = [];
+  const saved = { ...customer, telefono: 'nuevo' };
+  const query = {
+    select(fields) { calls.push(['select', fields]); return this; },
+    single() { return Promise.resolve({ data: saved, error: null }); },
+    eq(field, value) { calls.push(['eq', field, value]); return this; },
+  };
+  const client = {
+    from(table) {
+      calls.push(['from', table]);
+      return {
+        insert(payload) { calls.push(['insert', payload]); return query; },
+        update(payload) { calls.push(['update', payload]); return query; },
+      };
+    },
+  };
+  await saveCliente(client, null, { nombre_completo: 'Ana', email: '', telefono: '', tipo_documento: '', numero_documento: '' });
+  await saveCliente(client, customer.id, { nombre_completo: 'Ana', email: '', telefono: 'nuevo', tipo_documento: '', numero_documento: '' });
+  assert.deepEqual(calls.filter(([kind]) => kind === 'from'), [['from', 'clientes'], ['from', 'clientes']]);
+  assert.deepEqual(calls.find(([kind]) => kind === 'insert')[1], { nombre_completo: 'Ana', email: null, telefono: null, tipo_documento: null, numero_documento: null });
+  assert.deepEqual(calls.find(([kind]) => kind === 'update')[1], { nombre_completo: 'Ana', email: null, telefono: 'nuevo', tipo_documento: null, numero_documento: null });
+  assert.deepEqual(calls.find(([kind]) => kind === 'eq'), ['eq', 'id', customer.id]);
+  assert.doesNotMatch(JSON.stringify(calls.find(([kind]) => kind === 'insert')[1]), /id|created_at|updated_at/);
+});
+
+test('muestra formulario de alta y edición, errores y confirmación de guardado', () => {
+  const create = renderClientes({ status: 'empty', items: [], form: { id: null, values: {}, status: 'ready', error: '' } });
+  assert.match(create, /Nuevo cliente[\s\S]*client-form[\s\S]*Crear cliente/);
+  assert.match(create, /nombre_completo[\s\S]*tipo_documento[\s\S]*numero_documento/);
+  const edit = renderClientes({ status: 'ready', items: [customer], notice: 'Los cambios se guardaron correctamente.' }, { status: 'ready', data: { cliente: customer, ventas: [], pagos: [], licencias: [] } });
+  assert.match(edit, /guardaron correctamente[\s\S]*Editar[\s\S]*Identidad estable[\s\S]*cliente-1/);
+  const failure = renderClientes({ status: 'ready', items: [customer], form: { id: customer.id, values: customer, status: 'ready', error: 'Completá tipo y número de documento.' } });
+  assert.match(failure, /Completá tipo y número de documento/);
 });
 
 test('ignora respuestas tardías de búsquedas y detalles invalidados', async () => {
@@ -62,6 +107,74 @@ test('ignora respuestas tardías de búsquedas y detalles invalidados', async ()
   await firstDetailPending;
   assert.equal(detailState, null);
   assert.equal(details.isCurrent(secondDetail), false);
+});
+
+test('invalida un listado pendiente al abrir o cambiar el formulario de cliente', async () => {
+  let resolve;
+  const pendingList = new Promise((done) => { resolve = done; });
+  const listings = createRequestGuard();
+  let state = { form: null, items: [] };
+  const request = listings.next();
+  const loading = pendingList.then((items) => {
+    if (listings.isCurrent(request)) state = { form: null, items };
+  });
+
+  listings.next();
+  state = { ...state, form: { id: null, values: { nombre_completo: 'Texto sin guardar' } } };
+  resolve([customer]);
+  await loading;
+
+  assert.equal(state.form.values.nombre_completo, 'Texto sin guardar');
+  assert.deepEqual(state.items, []);
+});
+
+test('recarga el listado al cancelar un formulario que invalidó su carga pendiente', async () => {
+  const listings = createRequestGuard();
+  let state = { status: 'loading', query: 'ana', items: [], form: null };
+  let resolveStale;
+  const staleResponse = new Promise((done) => { resolveStale = done; });
+  const staleRequest = listings.next();
+  const applyList = async (request, response) => {
+    const items = await response;
+    if (listings.isCurrent(request)) state = { ...state, status: 'ready', items };
+  };
+  const staleLoading = applyList(staleRequest, staleResponse);
+
+  listings.next();
+  state = { ...state, form: { id: null, values: { nombre_completo: 'Texto sin guardar' } } };
+  resolveStale([customer]);
+  await staleLoading;
+  assert.equal(state.status, 'loading');
+  assert.ok(state.form);
+
+  state = { ...state, form: null };
+  const retryRequest = listings.next();
+  const reloaded = [customer];
+  await applyList(retryRequest, Promise.resolve(reloaded));
+
+  assert.equal(state.query, 'ana');
+  assert.equal(state.status, 'ready');
+  assert.deepEqual(state.items, reloaded);
+  assert.equal(state.form, null);
+});
+
+test('ignora success y error de guardados que ya no corresponden al formulario activo', async () => {
+  const saves = createRequestGuard();
+  let state = { form: { id: null, values: { nombre_completo: 'Alta activa' }, status: 'saving' }, notice: '' };
+  const firstSave = saves.next();
+  const applySuccess = () => {
+    if (saves.isCurrent(firstSave)) state = { form: null, notice: 'El cliente se creó correctamente.' };
+  };
+  const applyError = () => {
+    if (saves.isCurrent(firstSave)) state = { ...state, form: { ...state.form, status: 'ready', error: 'No pudimos guardar el cliente.' } };
+  };
+
+  saves.next();
+  state = { form: { id: customer.id, values: { nombre_completo: 'Edición nueva' }, status: 'ready' }, notice: '' };
+  applySuccess();
+  applyError();
+
+  assert.deepEqual(state, { form: { id: customer.id, values: { nombre_completo: 'Edición nueva' }, status: 'ready' }, notice: '' });
 });
 
 test('limpia detalle pendiente al salir de Clientes y no lo restaura al volver', async () => {
