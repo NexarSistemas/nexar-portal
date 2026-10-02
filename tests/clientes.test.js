@@ -128,6 +128,36 @@ test('invalida un listado pendiente al abrir o cambiar el formulario de cliente'
   assert.deepEqual(state.items, []);
 });
 
+test('recarga el listado al cancelar un formulario que invalidó su carga pendiente', async () => {
+  const listings = createRequestGuard();
+  let state = { status: 'loading', query: 'ana', items: [], form: null };
+  let resolveStale;
+  const staleResponse = new Promise((done) => { resolveStale = done; });
+  const staleRequest = listings.next();
+  const applyList = async (request, response) => {
+    const items = await response;
+    if (listings.isCurrent(request)) state = { ...state, status: 'ready', items };
+  };
+  const staleLoading = applyList(staleRequest, staleResponse);
+
+  listings.next();
+  state = { ...state, form: { id: null, values: { nombre_completo: 'Texto sin guardar' } } };
+  resolveStale([customer]);
+  await staleLoading;
+  assert.equal(state.status, 'loading');
+  assert.ok(state.form);
+
+  state = { ...state, form: null };
+  const retryRequest = listings.next();
+  const reloaded = [customer];
+  await applyList(retryRequest, Promise.resolve(reloaded));
+
+  assert.equal(state.query, 'ana');
+  assert.equal(state.status, 'ready');
+  assert.deepEqual(state.items, reloaded);
+  assert.equal(state.form, null);
+});
+
 test('ignora success y error de guardados que ya no corresponden al formulario activo', async () => {
   const saves = createRequestGuard();
   let state = { form: { id: null, values: { nombre_completo: 'Alta activa' }, status: 'saving' }, notice: '' };

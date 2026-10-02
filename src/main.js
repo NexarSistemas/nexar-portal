@@ -94,7 +94,14 @@ function clientHandlers() {
       clientes = { ...clientes, form: { id: cliente.id, values: clientValues(cliente), status: 'ready', error: '' }, notice: '' };
       showPortal();
     },
-    onCancelClientForm() { clienteSaveRequest.next(); clientes = { ...clientes, form: null }; showPortal(); },
+    onCancelClientForm() {
+      const query = clientes?.query || '';
+      const reloadList = clientes?.status === 'loading';
+      clienteSaveRequest.next();
+      clientes = { ...clientes, form: null };
+      showPortal();
+      if (reloadList) void loadClients(query);
+    },
     onSaveClient(values) { void saveClient(values); },
     onRetryList() { void loadClients(clientes?.query || ''); },
     onSelect(id) {
