@@ -3,7 +3,7 @@ import { signIn, signOut, resolveProfile } from './auth/auth.js';
 import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { hasDashboardData, loadAdminDashboard } from './dashboard/admin.js';
-import { clearClienteDetail, createRequestGuard, loadClienteDetail, loadClientes } from './dashboard/clientes.js';
+import { clearClienteDetail, clientValues, createRequestGuard, loadClienteDetail, loadClientes, saveCliente, validateClient } from './dashboard/clientes.js';
 import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, loadVentaDetail, loadVentas } from './dashboard/ventas.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
@@ -74,6 +74,19 @@ function clientHandlers() {
       showPortal();
     },
     onSearch(query) { void loadClients(query); },
+    onCreateClient() {
+      detalleRequest.next();
+      clientes = { ...clientes, selected: null, detail: null, form: { id: null, values: {}, status: 'ready', error: '' }, notice: '' };
+      showPortal();
+    },
+    onEditClient() {
+      const cliente = clientes?.detail?.data?.cliente;
+      if (!cliente) return;
+      clientes = { ...clientes, form: { id: cliente.id, values: clientValues(cliente), status: 'ready', error: '' }, notice: '' };
+      showPortal();
+    },
+    onCancelClientForm() { clientes = { ...clientes, form: null }; showPortal(); },
+    onSaveClient(values) { void saveClient(values); },
     onRetryList() { void loadClients(clientes?.query || ''); },
     onSelect(id) {
       const cliente = clientes?.items?.find((item) => item.id === id);
@@ -124,7 +137,7 @@ async function loadClients(query = '') {
 async function loadDetail(cliente) {
   if (profile?.rol !== 'admin') return;
   const request = detalleRequest.next();
-  clientes = { ...clientes, selected: cliente, detail: { status: 'loading' } };
+  clientes = { ...clientes, selected: cliente, detail: { status: 'loading' }, form: null };
   showPortal();
   try {
     const data = await loadClienteDetail(getSupabaseClient(), cliente);
@@ -135,6 +148,29 @@ async function loadDetail(cliente) {
     clientes = { ...clientes, selected: cliente, detail: { status: 'error' } };
   }
   if (profile?.rol === 'admin' && adminView === 'clientes') showPortal();
+}
+
+async function saveClient(values) {
+  if (profile?.rol !== 'admin' || !clientes?.form || clientes.form.status === 'saving') return;
+  const validation = validateClient(values);
+  if (validation.error) {
+    clientes = { ...clientes, form: { ...clientes.form, values, status: 'ready', error: validation.error } };
+    showPortal();
+    return;
+  }
+  const form = clientes.form;
+  clientes = { ...clientes, form: { ...form, values, status: 'saving', error: '' } };
+  showPortal();
+  try {
+    const saved = await saveCliente(getSupabaseClient(), form.id, validation.client);
+    const items = form.id ? (clientes.items ?? []).map((item) => item.id === saved.id ? saved : item) : [saved, ...(clientes.items ?? [])];
+    clientes = { ...clientes, status: items.length ? 'ready' : 'empty', items, form: null, notice: form.id ? 'Los cambios se guardaron correctamente.' : 'El cliente se creó correctamente.' };
+    void loadDetail(saved);
+  } catch {
+    if (clientes?.form?.id !== form.id) return;
+    clientes = { ...clientes, form: { ...form, values, status: 'ready', error: 'No pudimos guardar el cliente. Intentá nuevamente.' } };
+    showPortal();
+  }
 }
 
 async function loadSales(filters = {}) {

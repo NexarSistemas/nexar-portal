@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clearClienteDetail, createRequestGuard, loadClienteDetail, loadClientes, searchTerm } from '../src/dashboard/clientes.js';
+import { clearClienteDetail, clientValues, createRequestGuard, loadClienteDetail, loadClientes, saveCliente, searchTerm, validateClient } from '../src/dashboard/clientes.js';
 import { renderClientes } from '../src/ui/clientes.js';
 import { renderShell } from '../src/ui/shell.js';
 
@@ -23,6 +23,51 @@ test('representa búsqueda sin resultados, loading, error y reintento', () => {
   assert.match(renderClientes({ status: 'error', items: [] }), /retry-clientes/);
   assert.match(renderClientes({ status: 'ready', items: [customer] }, { status: 'loading' }), /Cargando detalle del cliente/);
   assert.match(renderClientes({ status: 'ready', items: [customer] }, { status: 'error' }), /retry-client-detail/);
+});
+
+test('normaliza y valida únicamente los campos canónicos editables del cliente', () => {
+  assert.deepEqual(clientValues({ nombre_completo: ' Ana ', email: ' ana@example.com ', telefono: ' 264 ', tipo_documento: ' DNI ', numero_documento: ' 123 ' }), {
+    nombre_completo: 'Ana', email: 'ana@example.com', telefono: '264', tipo_documento: 'DNI', numero_documento: '123',
+  });
+  assert.equal(validateClient({ nombre_completo: ' ' }).error, 'Indicá el nombre completo del cliente.');
+  assert.match(validateClient({ nombre_completo: 'Ana', tipo_documento: 'DNI' }).error, /tipo y número/i);
+  assert.equal(validateClient({ nombre_completo: 'Ana', tipo_documento: '', numero_documento: '' }).error, '');
+});
+
+test('crea y edita clientes con el UUID estable y sin campos no permitidos', async () => {
+  const calls = [];
+  const saved = { ...customer, telefono: 'nuevo' };
+  const query = {
+    select(fields) { calls.push(['select', fields]); return this; },
+    single() { return Promise.resolve({ data: saved, error: null }); },
+    eq(field, value) { calls.push(['eq', field, value]); return this; },
+  };
+  const client = {
+    from(table) {
+      calls.push(['from', table]);
+      return {
+        insert(payload) { calls.push(['insert', payload]); return query; },
+        update(payload) { calls.push(['update', payload]); return query; },
+      };
+    },
+  };
+  await saveCliente(client, null, { nombre_completo: 'Ana', email: '', telefono: '', tipo_documento: '', numero_documento: '' });
+  await saveCliente(client, customer.id, { nombre_completo: 'Ana', email: '', telefono: 'nuevo', tipo_documento: '', numero_documento: '' });
+  assert.deepEqual(calls.filter(([kind]) => kind === 'from'), [['from', 'clientes'], ['from', 'clientes']]);
+  assert.deepEqual(calls.find(([kind]) => kind === 'insert')[1], { nombre_completo: 'Ana', email: null, telefono: null, tipo_documento: null, numero_documento: null });
+  assert.deepEqual(calls.find(([kind]) => kind === 'update')[1], { nombre_completo: 'Ana', email: null, telefono: 'nuevo', tipo_documento: null, numero_documento: null });
+  assert.deepEqual(calls.find(([kind]) => kind === 'eq'), ['eq', 'id', customer.id]);
+  assert.doesNotMatch(JSON.stringify(calls.find(([kind]) => kind === 'insert')[1]), /id|created_at|updated_at/);
+});
+
+test('muestra formulario de alta y edición, errores y confirmación de guardado', () => {
+  const create = renderClientes({ status: 'empty', items: [], form: { id: null, values: {}, status: 'ready', error: '' } });
+  assert.match(create, /Nuevo cliente[\s\S]*client-form[\s\S]*Crear cliente/);
+  assert.match(create, /nombre_completo[\s\S]*tipo_documento[\s\S]*numero_documento/);
+  const edit = renderClientes({ status: 'ready', items: [customer], notice: 'Los cambios se guardaron correctamente.' }, { status: 'ready', data: { cliente: customer, ventas: [], pagos: [], licencias: [] } });
+  assert.match(edit, /guardaron correctamente[\s\S]*Editar[\s\S]*Identidad estable[\s\S]*cliente-1/);
+  const failure = renderClientes({ status: 'ready', items: [customer], form: { id: customer.id, values: customer, status: 'ready', error: 'Completá tipo y número de documento.' } });
+  assert.match(failure, /Completá tipo y número de documento/);
 });
 
 test('ignora respuestas tardías de búsquedas y detalles invalidados', async () => {

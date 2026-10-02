@@ -80,6 +80,13 @@ export function renderShell(root, profile, onLogout, dashboard = null, onRetryDa
     handlers.onSearch?.(new FormData(event.currentTarget).get('query'));
   });
   root.querySelectorAll?.('[data-client-id]').forEach((button) => button.addEventListener('click', () => handlers.onSelect?.(button.dataset.clientId)));
+  root.querySelector('#new-client')?.addEventListener('click', () => handlers.onCreateClient?.());
+  root.querySelector('#edit-client')?.addEventListener('click', () => handlers.onEditClient?.());
+  root.querySelector('#cancel-client-form')?.addEventListener('click', () => handlers.onCancelClientForm?.());
+  root.querySelector('#client-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    handlers.onSaveClient?.(Object.fromEntries(new FormData(event.currentTarget)));
+  });
   root.querySelector('#retry-clientes')?.addEventListener('click', () => handlers.onRetryList?.());
   root.querySelector('#retry-client-detail')?.addEventListener('click', () => handlers.onRetryDetail?.());
   root.querySelector('#close-client-detail')?.addEventListener('click', () => handlers.onCloseDetail?.());

@@ -3,6 +3,28 @@ const SALE_FIELDS = 'id,fecha_venta,moneda,estado,importe_total';
 const PAYMENT_FIELDS = 'id,venta_id,monto,moneda,proveedor_origen,estado_proveedor,decision_administrativa,created_at';
 const CLIENT_LIST_LIMIT = 50;
 
+function cleanOptional(value) {
+  const cleaned = String(value ?? '').trim();
+  return cleaned || null;
+}
+
+export function clientValues(values = {}) {
+  return {
+    nombre_completo: String(values.nombre_completo ?? '').trim(),
+    email: cleanOptional(values.email),
+    telefono: cleanOptional(values.telefono),
+    tipo_documento: cleanOptional(values.tipo_documento),
+    numero_documento: cleanOptional(values.numero_documento),
+  };
+}
+
+export function validateClient(values) {
+  const client = clientValues(values);
+  if (!client.nombre_completo) return { client, error: 'Indicá el nombre completo del cliente.' };
+  if (Boolean(client.tipo_documento) !== Boolean(client.numero_documento)) return { client, error: 'Completá tipo y número de documento, o dejá ambos vacíos.' };
+  return { client, error: '' };
+}
+
 export function createRequestGuard() {
   let current = 0;
   return {
@@ -57,4 +79,13 @@ export async function loadClienteDetail(client, cliente) {
   }
 
   return { cliente, ventas: ventas ?? [], pagos, licencias: licencias ?? [] };
+}
+
+export async function saveCliente(client, clienteId, values) {
+  const { client: payload, error: validationError } = validateClient(values);
+  if (validationError) throw new Error(validationError);
+  const request = clienteId ? client.from('clientes').update(payload).eq('id', clienteId) : client.from('clientes').insert(payload);
+  const { data, error } = await request.select(CLIENT_FIELDS).single();
+  if (error) throw error;
+  return data;
 }
