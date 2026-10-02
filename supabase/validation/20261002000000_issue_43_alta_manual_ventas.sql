@@ -24,3 +24,8 @@ select pg_get_functiondef(p.oid) like '%p_items is null%' as rechaza_items_sql_n
   pg_get_functiondef(p.oid) like '%jsonb_array_length(p_items) = 0%' as rechaza_array_vacio
 from pg_proc p
 where p.oid = to_regprocedure('public.crear_venta_manual(uuid,uuid,timestamp with time zone,text,jsonb,uuid)');
+
+select pg_catalog.regexp_count(pg_get_functiondef(p.oid), 'select \* into v_precio') = 1 as precio_resuelto_una_vez_por_item,
+  pg_get_functiondef(p.oid) like '%jsonb_array_elements(v_items_resueltos)%' as snapshots_reutilizados_para_insertar
+from pg_proc p
+where p.oid = to_regprocedure('public.crear_venta_manual(uuid,uuid,timestamp with time zone,text,jsonb,uuid)');

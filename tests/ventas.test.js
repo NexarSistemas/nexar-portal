@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { clearVentaDetail, createRequestGuard, currentPrices, loadVentaDetail, loadVentaFormData, loadVentas, saveVenta, saleValues, searchVentaClientes, validateSale, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard, currentPrices, loadVentaDetail, loadVentaFormData, loadVentas, restoreSaleFormAfterSaveFailure, saveVenta, saleValues, searchVentaClientes, validateSale, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
 import { renderVentas } from '../src/ui/ventas.js';
 import { renderShell } from '../src/ui/shell.js';
 
@@ -53,6 +53,7 @@ test('valida la venta manual y conserva vendedor opcional e ítems normalizados'
   const values = saleValues({ cliente_id: ' cliente-1 ', vendedor_id: '', fecha_venta: '2026-10-02T10:00', moneda: 'ars', items: [{ producto_id: ' producto-1 ', plan_id: ' plan-1 ', cantidad: '2' }] });
   assert.deepEqual(values, { cliente_id: 'cliente-1', vendedor_id: null, fecha_venta: '2026-10-02T10:00', moneda: 'ARS', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }] });
   assert.equal(validateSale(values).error, '');
+  assert.match(validateSale({ ...values, items: [{ producto_id: 'producto-1', plan_id: null, cantidad: 1 }] }).error, /producto, un plan/i);
 });
 
 test('muestra solo el precio activo y vigente para la fecha de venta', () => {
@@ -82,7 +83,7 @@ test('rechaza una respuesta RPC vacía antes de intentar abrir el detalle', asyn
   );
 });
 
-test('invalida una búsqueda de cliente pendiente al guardar y conserva el detalle creado', async () => {
+test('invalida una búsqueda de cliente pendiente al guardar y conserva el detalle creado', () => {
   const searches = createRequestGuard();
   const pendingSearch = searches.next();
   const created = { ...sale, id: 'venta-creada' };
@@ -98,28 +99,26 @@ test('invalida una búsqueda de cliente pendiente al guardar y conserva el detal
   assert.equal(state.selected, created);
   assert.deepEqual(state.detail, { status: 'loading' });
 
-  const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
-  assert.match(source, /ventaClientSearchRequest\.next\(\);\n  const request = ventaSaveRequest\.next\(\);/);
 });
 
-test('restablece la búsqueda invalidada si falla el guardado y permite una nueva', async () => {
+test('restablece el formulario sin resultados stale si falla el guardado y permite una nueva búsqueda', () => {
   const searches = createRequestGuard();
   const pendingSearch = searches.next();
-  let form = { status: 'ready', clientSearchStatus: 'loading', clientSearchError: '', clientes: [{ id: 'cliente-1' }] };
+  let form = { status: 'ready', clientSearchStatus: 'loading', clientSearchError: '', clientQuery: 'consulta nueva', clientes: [{ id: 'cliente-1', nombre_completo: 'Ana' }] };
 
   searches.next();
-  form = { ...form, status: 'ready', error: 'No pudimos guardar la venta.', clientSearchStatus: 'ready', clientSearchError: '' };
+  form = restoreSaleFormAfterSaveFailure(form, { cliente_id: 'cliente-1', items: [] });
 
   if (searches.isCurrent(pendingSearch)) form = { ...form, clientes: [{ id: 'cliente-tardío' }], clientSearchStatus: 'ready' };
-  assert.equal(form.clientSearchStatus, 'ready');
-  assert.equal(form.clientes[0].id, 'cliente-1');
+  assert.equal(form.clientSearchStatus, 'idle');
+  assert.equal(form.clientQuery, '');
+  assert.deepEqual(form.clientes, []);
+  assert.equal(form.selectedClient.id, 'cliente-1');
+  assert.match(form.error, /No pudimos guardar la venta/);
 
   const newSearch = searches.next();
   if (searches.isCurrent(newSearch)) form = { ...form, clientes: [{ id: 'cliente-nuevo' }], clientSearchStatus: 'ready' };
   assert.equal(form.clientes[0].id, 'cliente-nuevo');
-
-  const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
-  assert.match(source, /error: 'No pudimos guardar la venta\. Revisá los datos e intentá nuevamente\.', clientSearchStatus: 'ready', clientSearchError: ''/);
 });
 
 test('busca clientes de venta en servidor sin precargar un slice fijo', async () => {
@@ -202,8 +201,9 @@ test('representa loading, vacío, error y snapshots históricos de ventas', () =
   } });
   assert.match(html, /Producto histórico[\s\S]*Plan histórico[\s\S]*500/);
   assert.match(renderVentas({ status: 'ready', items: [sale], filters: {} }, { status: 'error' }), /retry-venta-detail/);
-  const form = renderVentas({ status: 'ready', items: [], filters: {}, form: { status: 'ready', values: { fecha_venta: '2026-10-02T10:00:00Z', moneda: 'ARS', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }] }, clientes: [{ id: 'cliente-51', nombre_completo: 'Zoe Cliente' }], catalogo: { vendedores: [], productos: [{ id: 'producto-1', nombre: 'Comercio' }], planes: [{ id: 'plan-1', producto_id: 'producto-1', nombre: 'Mensual' }], precios: [{ id: 'precio-1', plan_id: 'plan-1', moneda: 'ARS', importe: 500, vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null }] } } });
+  const form = renderVentas({ status: 'ready', items: [], filters: {}, form: { status: 'ready', values: { fecha_venta: '2026-10-02T10:00:00Z', moneda: 'ARS', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }] }, clientes: [{ id: 'cliente-51', nombre_completo: 'Zoe Cliente' }], catalogo: { vendedores: [], productos: [{ id: 'producto-1', nombre: 'Comercio' }, { id: 'producto-sin-plan', nombre: 'Sin plan' }], planes: [{ id: 'plan-1', producto_id: 'producto-1', nombre: 'Mensual' }], precios: [{ id: 'precio-1', plan_id: 'plan-1', moneda: 'ARS', importe: 500, vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null }] } } });
   assert.match(form, /Nueva venta[\s\S]*Buscar cliente[\s\S]*Zoe Cliente[\s\S]*Crear cliente[\s\S]*Precio vigente[\s\S]*500/);
+  assert.doesNotMatch(form, /Sin plan/);
 });
 
 test('mantiene el detalle cancelable y la navegación de ventas solo para administración', async () => {
@@ -241,4 +241,5 @@ test('la migración de alta manual usa una RPC invoker, snapshots e idempotencia
   assert.match(validation, /authenticated_con_execute[\s\S]*anon_sin_execute/);
   assert.match(source, /p_items is null[\s\S]*jsonb_typeof\(p_items\) <> 'array'[\s\S]*jsonb_array_length\(p_items\) = 0/);
   assert.match(validation, /rechaza_items_sql_null[\s\S]*rechaza_json_no_array[\s\S]*rechaza_array_vacio/);
+  assert.match(validation, /precio_resuelto_una_vez_por_item[\s\S]*snapshots_reutilizados_para_insertar/);
 });

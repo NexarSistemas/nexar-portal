@@ -36,8 +36,25 @@ export function validateSale(values) {
   if (!sale.fecha_venta) return { sale, error: 'Indicá la fecha de la venta.' };
   if (!/^[A-Z]{3}$/.test(sale.moneda)) return { sale, error: 'Indicá una moneda válida.' };
   if (!sale.items.length) return { sale, error: 'Agregá al menos un ítem.' };
-  if (sale.items.some((item) => !item.producto_id || !Number.isFinite(item.cantidad) || item.cantidad <= 0)) return { sale, error: 'Cada ítem requiere un producto y una cantidad mayor a cero.' };
+  if (sale.items.some((item) => !item.producto_id || !item.plan_id || !Number.isFinite(item.cantidad) || item.cantidad <= 0)) return { sale, error: 'Cada ítem requiere un producto, un plan y una cantidad mayor a cero.' };
   return { sale, error: '' };
+}
+
+export function restoreSaleFormAfterSaveFailure(form, values) {
+  const selectedClient = form.selectedClient
+    ?? (form.clientes ?? []).find((client) => client.id === values.cliente_id)
+    ?? null;
+  return {
+    ...form,
+    values,
+    clientes: [],
+    clientQuery: '',
+    selectedClient,
+    status: 'ready',
+    error: 'No pudimos guardar la venta. Revisá los datos e intentá nuevamente.',
+    clientSearchStatus: 'idle',
+    clientSearchError: '',
+  };
 }
 
 export function currentPrices(prices, at) {

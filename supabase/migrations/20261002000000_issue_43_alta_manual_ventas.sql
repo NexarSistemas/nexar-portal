@@ -26,7 +26,9 @@ declare
   v_plan public.planes;
   v_precio public.precios;
   v_cantidad numeric(12,3);
+  v_importe_item numeric(14,2);
   v_total numeric(14,2) := 0;
+  v_items_resueltos jsonb := '[]'::jsonb;
   v_moneda text := pg_catalog.upper(pg_catalog.btrim(p_moneda));
 begin
   if auth.uid() is null then
@@ -103,30 +105,33 @@ begin
       raise exception using errcode = '22023', message = 'No hay un precio vigente para el plan y moneda seleccionados.';
     end if;
 
-    v_total := v_total + (v_cantidad * v_precio.importe);
+    v_importe_item := v_cantidad * v_precio.importe;
+    v_total := v_total + v_importe_item;
+    v_items_resueltos := v_items_resueltos || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'producto_id', v_producto.id,
+      'plan_id', v_plan.id,
+      'precio_id', v_precio.id,
+      'descripcion', v_producto.nombre || ' · ' || v_plan.nombre,
+      'producto_nombre', v_producto.nombre,
+      'plan_nombre', v_plan.nombre,
+      'cantidad', v_cantidad,
+      'precio_unitario', v_precio.importe,
+      'importe_total', v_importe_item
+    ));
   end loop;
 
   insert into public.ventas (cliente_id, vendedor_id, fecha_venta, moneda, estado, importe_total, manual_idempotency_key)
   values (p_cliente_id, p_vendedor_id, p_fecha_venta, v_moneda, 'pendiente', v_total, p_idempotency_key)
   returning * into v_venta;
 
-  for v_item in select value from pg_catalog.jsonb_array_elements(p_items)
+  for v_item in select value from pg_catalog.jsonb_array_elements(v_items_resueltos)
   loop
-    select * into v_producto from public.productos where id = (v_item ->> 'producto_id')::uuid;
-    select * into v_plan from public.planes where id = (v_item ->> 'plan_id')::uuid;
-    select * into v_precio
-    from public.precios
-    where plan_id = v_plan.id and moneda = v_moneda and estado = 'activo'
-      and vigente_desde <= p_fecha_venta and (vigente_hasta is null or vigente_hasta > p_fecha_venta)
-    order by vigente_desde desc limit 1;
-    v_cantidad := (v_item ->> 'cantidad')::numeric(12,3);
-
     insert into public.venta_items (
       venta_id, producto_id, plan_id, precio_id, descripcion, producto_nombre, plan_nombre, cantidad, precio_unitario, importe_total
     ) values (
-      v_venta.id, v_producto.id, v_plan.id, v_precio.id,
-      v_producto.nombre || ' · ' || v_plan.nombre, v_producto.nombre, v_plan.nombre,
-      v_cantidad, v_precio.importe, v_cantidad * v_precio.importe
+      v_venta.id, (v_item ->> 'producto_id')::uuid, (v_item ->> 'plan_id')::uuid, (v_item ->> 'precio_id')::uuid,
+      v_item ->> 'descripcion', v_item ->> 'producto_nombre', v_item ->> 'plan_nombre',
+      (v_item ->> 'cantidad')::numeric(12,3), (v_item ->> 'precio_unitario')::numeric(14,2), (v_item ->> 'importe_total')::numeric(14,2)
     );
   end loop;
 
@@ -142,4 +147,4 @@ revoke all on function public.crear_venta_manual(uuid, uuid, timestamptz, text, 
 grant execute on function public.crear_venta_manual(uuid, uuid, timestamptz, text, jsonb, uuid) to authenticated;
 
 comment on function public.crear_venta_manual(uuid, uuid, timestamptz, text, jsonb, uuid) is
-  'Crea una venta manual pendiente con ítems y snapshots en una única transacción; resuelve precios vigentes y es idempotente por clave explícita.';
+  'Crea una venta manual pendiente con ítems y snapshots en una única transacción; el MVP acepta solo planes activos con precio canónico vigente e idempotencia por clave explícita.';

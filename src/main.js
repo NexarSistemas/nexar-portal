@@ -4,7 +4,7 @@ import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { hasDashboardData, loadAdminDashboard } from './dashboard/admin.js';
 import { clearClienteDetail, clientValues, createRequestGuard, loadClienteDetail, loadClientes, saveCliente, validateClient } from './dashboard/clientes.js';
-import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, loadVentaDetail, loadVentaFormData, loadVentas, saveVenta, searchVentaClientes, validateSale } from './dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, loadVentaDetail, loadVentaFormData, loadVentas, restoreSaleFormAfterSaveFailure, saveVenta, searchVentaClientes, validateSale } from './dashboard/ventas.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
 
@@ -162,7 +162,10 @@ function clientHandlers() {
     },
     onChangeSaleField(field, value) {
       if (!ventas?.form || ventas.form.status === 'saving') return;
-      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, [field]: value } } };
+      const selectedClient = field === 'cliente_id'
+        ? ventas.form.clientes.find((client) => client.id === value) ?? null
+        : ventas.form.selectedClient;
+      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, [field]: value }, selectedClient } };
       showPortal();
     },
     onSearchSaleClients(query) { void searchSaleClients(query); },
@@ -280,15 +283,15 @@ async function createSaleForm() {
   ventaSaveRequest.next();
   const request = ventaFormRequest.next();
   const values = { cliente_id: '', vendedor_id: '', fecha_venta: new Date().toISOString(), moneda: 'ARS', items: [{}] };
-  ventas = { ...ventas, selected: null, detail: null, form: { values, catalogo: {}, clientes: [], clientQuery: '', status: 'loading', error: '' }, notice: '' };
+  ventas = { ...ventas, selected: null, detail: null, form: { values, catalogo: {}, clientes: [], selectedClient: null, clientQuery: '', status: 'loading', error: '' }, notice: '' };
   showPortal();
   try {
     const catalogo = await loadVentaFormData(getSupabaseClient());
     if (!ventaFormRequest.isCurrent(request)) return;
-    ventas = { ...ventas, form: { values, catalogo, clientes: [], clientQuery: '', status: 'ready', error: '', idempotencyKey: crypto.randomUUID() } };
+    ventas = { ...ventas, form: { values, catalogo, clientes: [], selectedClient: null, clientQuery: '', status: 'ready', error: '', idempotencyKey: crypto.randomUUID() } };
   } catch {
     if (!ventaFormRequest.isCurrent(request)) return;
-    ventas = { ...ventas, form: { values, catalogo: {}, clientes: [], clientQuery: '', status: 'ready', error: 'No pudimos cargar los datos para crear la venta.' } };
+    ventas = { ...ventas, form: { values, catalogo: {}, clientes: [], selectedClient: null, clientQuery: '', status: 'ready', error: 'No pudimos cargar los datos para crear la venta.' } };
   }
   if (profile?.rol === 'admin' && adminView === 'ventas') showPortal();
 }
@@ -333,7 +336,7 @@ async function saveSale(values) {
     void loadSaleDetail(created);
   } catch {
     if (!ventaSaveRequest.isCurrent(request)) return;
-    ventas = { ...ventas, form: { ...form, values: input, status: 'ready', error: 'No pudimos guardar la venta. Revisá los datos e intentá nuevamente.', clientSearchStatus: 'ready', clientSearchError: '' } };
+    ventas = { ...ventas, form: restoreSaleFormAfterSaveFailure(form, input) };
     showPortal();
   }
 }
