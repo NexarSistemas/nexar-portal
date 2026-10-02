@@ -65,6 +65,11 @@ export function restoreSaleFormAfterSaveFailure(form, values) {
   };
 }
 
+export function selectedSaleClient(form, value) {
+  return (form.clientes ?? []).find((client) => client.id === value)
+    ?? (form.selectedClient?.id === value ? form.selectedClient : null);
+}
+
 export function currentPrices(prices, at) {
   const when = new Date(at).getTime();
   return (prices ?? []).filter((price) => price.estado === 'activo'

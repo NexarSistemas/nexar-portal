@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { clearVentaDetail, createRequestGuard, currentPrices, eligibleSaleCatalog, loadVentaDetail, loadVentaFormData, loadVentas, newSaleItem, restoreSaleFormAfterSaveFailure, saleMatchesFilters, saveVenta, saleValues, searchVentaClientes, validateSale, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard, currentPrices, eligibleSaleCatalog, loadVentaDetail, loadVentaFormData, loadVentas, newSaleItem, restoreSaleFormAfterSaveFailure, saleMatchesFilters, saveVenta, saleValues, searchVentaClientes, selectedSaleClient, validateSale, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
 import { renderVentas } from '../src/ui/ventas.js';
 import { renderShell } from '../src/ui/shell.js';
 
@@ -165,6 +165,26 @@ test('restablece el formulario sin resultados stale si falla el guardado y permi
   const newSearch = searches.next();
   if (searches.isCurrent(newSearch)) form = { ...form, clientes: [{ id: 'cliente-nuevo' }], clientSearchStatus: 'ready' };
   assert.equal(form.clientes[0].id, 'cliente-nuevo');
+});
+
+test('conserva el cliente seleccionado al reintentar una venta después de un fallo', () => {
+  const selected = { id: 'cliente-1', nombre_completo: 'Ana' };
+  const other = { id: 'cliente-2', nombre_completo: 'Beto' };
+  const values = { cliente_id: selected.id, items: [] };
+  const restored = restoreSaleFormAfterSaveFailure({
+    status: 'ready', clientes: [selected], selectedClient: selected, clientSearchStatus: 'loading',
+  }, values);
+
+  assert.deepEqual(restored.clientes, []);
+  assert.equal(restored.selectedClient, selected);
+  assert.equal(selectedSaleClient(restored, selected.id), selected);
+
+  const restoredAgain = restoreSaleFormAfterSaveFailure(restored, values);
+  assert.equal(restoredAgain.selectedClient, selected);
+  assert.equal(restoredAgain.values.cliente_id, selected.id);
+  assert.equal(selectedSaleClient({ ...restoredAgain, clientes: [other] }, other.id), other);
+  assert.equal(selectedSaleClient(restoredAgain, ''), null);
+  assert.equal(selectedSaleClient(restoredAgain, other.id), null);
 });
 
 test('busca clientes de venta en servidor sin precargar un slice fijo', async () => {

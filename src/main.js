@@ -4,7 +4,7 @@ import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { hasDashboardData, loadAdminDashboard } from './dashboard/admin.js';
 import { clearClienteDetail, clientValues, createRequestGuard, loadClienteDetail, loadClientes, saveCliente, validateClient } from './dashboard/clientes.js';
-import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, eligibleSaleCatalog, loadVentaDetail, loadVentaFormData, loadVentas, newSaleItem, restoreSaleFormAfterSaveFailure, saleMatchesFilters, saveVenta, searchVentaClientes, validateSale } from './dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, eligibleSaleCatalog, loadVentaDetail, loadVentaFormData, loadVentas, newSaleItem, restoreSaleFormAfterSaveFailure, saleMatchesFilters, saveVenta, searchVentaClientes, selectedSaleClient, validateSale } from './dashboard/ventas.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
 
@@ -163,7 +163,7 @@ function clientHandlers() {
     onChangeSaleField(field, value) {
       if (!ventas?.form || ventas.form.status === 'saving') return;
       const selectedClient = field === 'cliente_id'
-        ? ventas.form.clientes.find((client) => client.id === value) ?? null
+        ? selectedSaleClient(ventas.form, value)
         : ventas.form.selectedClient;
       const values = { ...ventas.form.values, [field]: value };
       if (field === 'fecha_venta' || field === 'moneda') {
