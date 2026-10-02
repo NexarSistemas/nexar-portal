@@ -1,3 +1,5 @@
+import { eligibleSaleCatalog } from '../dashboard/ventas.js';
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 }
@@ -40,18 +42,15 @@ function localDateTime(value) {
 
 function itemPrice(form, item) {
   if (!item.plan_id) return null;
-  const at = new Date(form.values.fecha_venta).getTime();
-  return (form.catalogo?.precios ?? []).find((price) => price.plan_id === item.plan_id
-    && price.moneda === form.values.moneda
-    && new Date(price.vigente_desde).getTime() <= at
-    && (!price.vigente_hasta || new Date(price.vigente_hasta).getTime() > at));
+  return eligibleSaleCatalog(form.catalogo, form.values).precios
+    .find((price) => price.plan_id === item.plan_id) ?? null;
 }
 
 function renderVentaForm(form) {
   const values = form.values ?? {};
   const catalogo = form.catalogo ?? {};
   const saving = form.status !== 'ready';
-  const items = values.items?.length ? values.items : [{}];
+  const items = values.items ?? [];
   const clients = form.selectedClient && !(form.clientes ?? []).some((client) => client.id === form.selectedClient.id)
     ? [form.selectedClient, ...(form.clientes ?? [])]
     : form.clientes ?? [];
@@ -70,10 +69,11 @@ function renderVentaForm(form) {
 }
 
 function renderSaleItem(form, item, index, saving) {
-  const plans = (form.catalogo?.planes ?? []).filter((plan) => plan.producto_id === item.producto_id);
-  const products = (form.catalogo?.productos ?? []).filter((product) => (form.catalogo?.planes ?? []).some((plan) => plan.producto_id === product.id));
+  const catalogo = eligibleSaleCatalog(form.catalogo, form.values);
+  const plans = catalogo.planes.filter((plan) => plan.producto_id === item.producto_id);
+  const products = catalogo.productos;
   const price = itemPrice(form, item);
-  return `<article class="sale-form-item" data-sale-item="${index}"><div class="sale-form-item-heading"><strong>Ítem ${index + 1}</strong>${index ? `<button class="button quiet remove-sale-item" type="button" data-remove-sale-item="${index}" ${saving ? 'disabled' : ''}>Quitar</button>` : ''}</div><label>Producto<select data-sale-item-field="producto_id" data-sale-item="${index}" required ${saving ? 'disabled' : ''}><option value="">Seleccioná un producto</option>${products.map((product) => `<option value="${escapeHtml(product.id)}" ${item.producto_id === product.id ? 'selected' : ''}>${escapeHtml(product.nombre)}</option>`).join('')}</select></label><label>Plan<select data-sale-item-field="plan_id" data-sale-item="${index}" required ${saving ? 'disabled' : ''}><option value="">Seleccioná un plan</option>${plans.map((plan) => `<option value="${escapeHtml(plan.id)}" ${item.plan_id === plan.id ? 'selected' : ''}>${escapeHtml(plan.nombre)}</option>`).join('')}</select></label><label>Cantidad<input data-sale-item-field="cantidad" data-sale-item="${index}" type="number" min="0.001" step="0.001" value="${escapeHtml(item.cantidad || 1)}" required ${saving ? 'disabled' : ''} /></label><p class="sale-price">${price ? `Precio vigente: <strong>${money(price.importe, price.moneda)}</strong>` : item.plan_id ? 'No hay un precio vigente para ese plan y moneda.' : 'Seleccioná un plan para resolver el precio vigente.'}</p></article>`;
+  return `<article class="sale-form-item" data-sale-item="${index}"><div class="sale-form-item-heading"><strong>Ítem ${index + 1}</strong>${index ? `<button class="button quiet remove-sale-item" type="button" data-remove-sale-item="${index}" ${saving ? 'disabled' : ''}>Quitar</button>` : ''}</div><label>Producto<select data-sale-item-field="producto_id" data-sale-item="${index}" required ${saving ? 'disabled' : ''}><option value="">Seleccioná un producto</option>${products.map((product) => `<option value="${escapeHtml(product.id)}" ${item.producto_id === product.id ? 'selected' : ''}>${escapeHtml(product.nombre)}</option>`).join('')}</select></label><label>Plan<select data-sale-item-field="plan_id" data-sale-item="${index}" required ${saving ? 'disabled' : ''}><option value="">Seleccioná un plan</option>${plans.map((plan) => `<option value="${escapeHtml(plan.id)}" ${item.plan_id === plan.id ? 'selected' : ''}>${escapeHtml(plan.nombre)}</option>`).join('')}</select></label><label>Cantidad<input data-sale-item-field="cantidad" data-sale-item="${index}" type="number" min="0.001" step="0.001" value="${escapeHtml(item.cantidad ?? '')}" required ${saving ? 'disabled' : ''} /></label><p class="sale-price">${price ? `Precio vigente: <strong>${money(price.importe, price.moneda)}</strong>` : item.plan_id ? 'No hay un precio vigente para ese plan y moneda.' : 'Seleccioná un plan para resolver el precio vigente.'}</p></article>`;
 }
 
 function renderVentaDetail({ venta, cliente, vendedor, items, pagos, licencias, comisiones }) {

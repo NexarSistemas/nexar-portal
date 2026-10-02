@@ -16,12 +16,20 @@ function cleanOptional(value) {
   return cleaned || null;
 }
 
+export function saleCurrency(value) {
+  return String(value ?? 'ARS').trim().toUpperCase();
+}
+
+export function newSaleItem() {
+  return { cantidad: 1 };
+}
+
 export function saleValues(values = {}) {
   return {
     cliente_id: cleanOptional(values.cliente_id),
     vendedor_id: cleanOptional(values.vendedor_id),
     fecha_venta: cleanOptional(values.fecha_venta),
-    moneda: String(values.moneda ?? 'ARS').trim().toUpperCase(),
+    moneda: saleCurrency(values.moneda),
     items: (values.items ?? []).map((item) => ({
       producto_id: cleanOptional(item.producto_id),
       plan_id: cleanOptional(item.plan_id),
@@ -62,6 +70,25 @@ export function currentPrices(prices, at) {
   return (prices ?? []).filter((price) => price.estado === 'activo'
     && new Date(price.vigente_desde).getTime() <= when
     && (!price.vigente_hasta || new Date(price.vigente_hasta).getTime() > when));
+}
+
+export function eligibleSaleCatalog(catalogo = {}, values = {}) {
+  const moneda = saleCurrency(values.moneda);
+  const precios = currentPrices(catalogo.precios, values.fecha_venta)
+    .filter((price) => saleCurrency(price.moneda) === moneda);
+  const eligiblePlanIds = new Set(precios.map((price) => price.plan_id));
+  const planes = (catalogo.planes ?? []).filter((plan) => eligiblePlanIds.has(plan.id));
+  const eligibleProductIds = new Set(planes.map((plan) => plan.producto_id));
+  const productos = (catalogo.productos ?? []).filter((product) => eligibleProductIds.has(product.id));
+  return { moneda, productos, planes, precios };
+}
+
+export function saleMatchesFilters(venta, filters = {}) {
+  if (filters.estado && venta.estado !== filters.estado) return false;
+  const fechaVenta = new Date(venta.fecha_venta);
+  if (filters.desde && fechaVenta < localDayStart(filters.desde)) return false;
+  if (filters.hasta && fechaVenta >= nextLocalDayStart(filters.hasta)) return false;
+  return true;
 }
 
 export async function loadVentaFormData(client) {

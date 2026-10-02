@@ -4,7 +4,7 @@ import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { hasDashboardData, loadAdminDashboard } from './dashboard/admin.js';
 import { clearClienteDetail, clientValues, createRequestGuard, loadClienteDetail, loadClientes, saveCliente, validateClient } from './dashboard/clientes.js';
-import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, loadVentaDetail, loadVentaFormData, loadVentas, restoreSaleFormAfterSaveFailure, saveVenta, searchVentaClientes, validateSale } from './dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, eligibleSaleCatalog, loadVentaDetail, loadVentaFormData, loadVentas, newSaleItem, restoreSaleFormAfterSaveFailure, saleMatchesFilters, saveVenta, searchVentaClientes, validateSale } from './dashboard/ventas.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
 
@@ -142,7 +142,7 @@ function clientHandlers() {
     },
     onAddSaleItem() {
       if (!ventas?.form || ventas.form.status === 'saving') return;
-      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, items: [...(ventas.form.values.items ?? []), {}] } } };
+      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, items: [...(ventas.form.values.items ?? []), newSaleItem()] } } };
       showPortal();
     },
     onRemoveSaleItem(index) {
@@ -165,7 +165,16 @@ function clientHandlers() {
       const selectedClient = field === 'cliente_id'
         ? ventas.form.clientes.find((client) => client.id === value) ?? null
         : ventas.form.selectedClient;
-      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, [field]: value }, selectedClient } };
+      const values = { ...ventas.form.values, [field]: value };
+      if (field === 'fecha_venta' || field === 'moneda') {
+        const { planes } = eligibleSaleCatalog(ventas.form.catalogo, values);
+        values.items = (values.items ?? []).map((item) => (
+          planes.some((plan) => plan.id === item.plan_id && plan.producto_id === item.producto_id)
+            ? item
+            : { ...item, plan_id: null }
+        ));
+      }
+      ventas = { ...ventas, form: { ...ventas.form, values, selectedClient } };
       showPortal();
     },
     onSearchSaleClients(query) { void searchSaleClients(query); },
@@ -282,7 +291,7 @@ async function createSaleForm() {
   ventaDetalleRequest.next();
   ventaSaveRequest.next();
   const request = ventaFormRequest.next();
-  const values = { cliente_id: '', vendedor_id: '', fecha_venta: new Date().toISOString(), moneda: 'ARS', items: [{}] };
+  const values = { cliente_id: '', vendedor_id: '', fecha_venta: new Date().toISOString(), moneda: 'ARS', items: [newSaleItem()] };
   ventas = { ...ventas, selected: null, detail: null, form: { values, catalogo: {}, clientes: [], selectedClient: null, clientQuery: '', status: 'loading', error: '' }, notice: '' };
   showPortal();
   try {
@@ -330,8 +339,10 @@ async function saveSale(values) {
   try {
     const created = await saveVenta(getSupabaseClient(), validation.sale, form.idempotencyKey);
     if (!ventaSaveRequest.isCurrent(request)) return;
-    const items = [created, ...(ventas.items ?? []).filter((item) => item.id !== created.id)];
-    ventas = { ...ventas, status: 'ready', items, form: null, selected: created, detail: { status: 'loading' }, notice: 'La venta se creó correctamente.' };
+    const items = saleMatchesFilters(created, ventas.filters)
+      ? [created, ...(ventas.items ?? []).filter((item) => item.id !== created.id)]
+      : ventas.items ?? [];
+    ventas = { ...ventas, status: items.length ? 'ready' : 'empty', items, form: null, selected: created, detail: { status: 'loading' }, notice: 'La venta se creó correctamente.' };
     showPortal();
     void loadSaleDetail(created);
   } catch {

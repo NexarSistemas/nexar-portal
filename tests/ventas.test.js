@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { clearVentaDetail, createRequestGuard, currentPrices, loadVentaDetail, loadVentaFormData, loadVentas, restoreSaleFormAfterSaveFailure, saveVenta, saleValues, searchVentaClientes, validateSale, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard, currentPrices, eligibleSaleCatalog, loadVentaDetail, loadVentaFormData, loadVentas, newSaleItem, restoreSaleFormAfterSaveFailure, saleMatchesFilters, saveVenta, saleValues, searchVentaClientes, validateSale, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
 import { renderVentas } from '../src/ui/ventas.js';
 import { renderShell } from '../src/ui/shell.js';
 
@@ -54,6 +54,17 @@ test('valida la venta manual y conserva vendedor opcional e ítems normalizados'
   assert.deepEqual(values, { cliente_id: 'cliente-1', vendedor_id: null, fecha_venta: '2026-10-02T10:00', moneda: 'ARS', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }] });
   assert.equal(validateSale(values).error, '');
   assert.match(validateSale({ ...values, items: [{ producto_id: 'producto-1', plan_id: null, cantidad: 1 }] }).error, /producto, un plan/i);
+  assert.match(validateSale({ ...values, items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 0 }] }).error, /cantidad mayor a cero/i);
+  assert.match(validateSale({ ...values, items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: -1 }] }).error, /cantidad mayor a cero/i);
+});
+
+test('inicializa cada ítem con cantidad real y valida sin editarla al seleccionar catálogo', () => {
+  assert.deepEqual(newSaleItem(), { cantidad: 1 });
+  const values = {
+    cliente_id: 'cliente-1', fecha_venta: '2026-10-02T10:00', moneda: 'ARS',
+    items: [{ ...newSaleItem(), producto_id: 'producto-1', plan_id: 'plan-1' }],
+  };
+  assert.equal(validateSale(values).error, '');
 });
 
 test('muestra solo el precio activo y vigente para la fecha de venta', () => {
@@ -63,6 +74,41 @@ test('muestra solo el precio activo y vigente para la fecha de venta', () => {
     { id: 'inactivo', estado: 'inactivo', vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null },
   ];
   assert.deepEqual(currentPrices(prices, '2026-10-02T00:00:00Z').map(({ id }) => id), ['actual']);
+});
+
+test('ofrece únicamente productos y planes con precio vigente en fecha y moneda normalizadas', () => {
+  const catalogo = {
+    productos: [{ id: 'producto-ars' }, { id: 'producto-usd' }, { id: 'producto-sin-precio' }],
+    planes: [
+      { id: 'plan-ars', producto_id: 'producto-ars' },
+      { id: 'plan-usd', producto_id: 'producto-usd' },
+      { id: 'plan-sin-precio', producto_id: 'producto-sin-precio' },
+    ],
+    precios: [
+      { id: 'precio-ars', plan_id: 'plan-ars', moneda: 'ARS', estado: 'activo', vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null },
+      { id: 'precio-usd', plan_id: 'plan-usd', moneda: 'USD', estado: 'activo', vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null },
+      { id: 'precio-vencido', plan_id: 'plan-sin-precio', moneda: 'ARS', estado: 'activo', vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: '2026-10-01T00:00:00Z' },
+    ],
+  };
+
+  const ars = eligibleSaleCatalog(catalogo, { fecha_venta: '2026-10-02T10:00:00Z', moneda: ' ars ' });
+  assert.equal(ars.moneda, 'ARS');
+  assert.deepEqual(ars.productos.map((product) => product.id), ['producto-ars']);
+  assert.deepEqual(ars.planes.map((plan) => plan.id), ['plan-ars']);
+  assert.deepEqual(ars.precios.map((price) => price.id), ['precio-ars']);
+
+  const usd = eligibleSaleCatalog(catalogo, { fecha_venta: '2026-10-02T10:00:00Z', moneda: 'USD' });
+  assert.deepEqual(usd.productos.map((product) => product.id), ['producto-usd']);
+  assert.deepEqual(usd.planes.map((plan) => plan.id), ['plan-usd']);
+});
+
+test('incluye una venta creada solo cuando coincide con los filtros actuales', () => {
+  const pending = { ...sale, estado: 'pendiente', fecha_venta: '2026-10-02T10:00:00Z' };
+  assert.equal(saleMatchesFilters(pending, {}), true);
+  assert.equal(saleMatchesFilters(pending, { estado: 'pendiente' }), true);
+  assert.equal(saleMatchesFilters(pending, { estado: 'confirmada' }), false);
+  assert.equal(saleMatchesFilters(pending, { desde: '2026-10-02', hasta: '2026-10-02' }), true);
+  assert.equal(saleMatchesFilters(pending, { hasta: '2026-10-01' }), false);
 });
 
 test('crea la venta exclusivamente mediante la RPC atómica con clave de idempotencia', async () => {
@@ -201,9 +247,10 @@ test('representa loading, vacío, error y snapshots históricos de ventas', () =
   } });
   assert.match(html, /Producto histórico[\s\S]*Plan histórico[\s\S]*500/);
   assert.match(renderVentas({ status: 'ready', items: [sale], filters: {} }, { status: 'error' }), /retry-venta-detail/);
-  const form = renderVentas({ status: 'ready', items: [], filters: {}, form: { status: 'ready', values: { fecha_venta: '2026-10-02T10:00:00Z', moneda: 'ARS', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }] }, clientes: [{ id: 'cliente-51', nombre_completo: 'Zoe Cliente' }], catalogo: { vendedores: [], productos: [{ id: 'producto-1', nombre: 'Comercio' }, { id: 'producto-sin-plan', nombre: 'Sin plan' }], planes: [{ id: 'plan-1', producto_id: 'producto-1', nombre: 'Mensual' }], precios: [{ id: 'precio-1', plan_id: 'plan-1', moneda: 'ARS', importe: 500, vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null }] } } });
+  const form = renderVentas({ status: 'ready', items: [], filters: {}, form: { status: 'ready', values: { fecha_venta: '2026-10-02T10:00:00Z', moneda: 'ars', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }] }, clientes: [{ id: 'cliente-51', nombre_completo: 'Zoe Cliente' }], catalogo: { vendedores: [], productos: [{ id: 'producto-1', nombre: 'Comercio' }, { id: 'producto-sin-plan', nombre: 'Sin plan' }], planes: [{ id: 'plan-1', producto_id: 'producto-1', nombre: 'Mensual' }, { id: 'plan-sin-precio', producto_id: 'producto-sin-plan', nombre: 'Sin precio' }], precios: [{ id: 'precio-1', plan_id: 'plan-1', moneda: 'ARS', estado: 'activo', importe: 500, vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null }] } } });
   assert.match(form, /Nueva venta[\s\S]*Buscar cliente[\s\S]*Zoe Cliente[\s\S]*Crear cliente[\s\S]*Precio vigente[\s\S]*500/);
   assert.doesNotMatch(form, /Sin plan/);
+  assert.doesNotMatch(form, /Sin precio/);
 });
 
 test('mantiene el detalle cancelable y la navegación de ventas solo para administración', async () => {
