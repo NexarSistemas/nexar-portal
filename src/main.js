@@ -4,6 +4,7 @@ import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { hasDashboardData, loadAdminDashboard } from './dashboard/admin.js';
 import { clearClienteDetail, createRequestGuard, loadClienteDetail, loadClientes } from './dashboard/clientes.js';
+import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, loadVentaDetail, loadVentas } from './dashboard/ventas.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
 
@@ -18,18 +19,24 @@ let profile = null;
 let dashboard = null;
 let adminView = 'inicio';
 let clientes = null;
+let ventas = null;
 const clientesRequest = createRequestGuard();
 const detalleRequest = createRequestGuard();
+const ventasRequest = createVentasRequestGuard();
+const ventaDetalleRequest = createVentasRequestGuard();
 let resolving = false;
 let unsubscribe = null;
 
 function showLogin(message = '') {
   clientesRequest.next();
   detalleRequest.next();
+  ventasRequest.next();
+  ventaDetalleRequest.next();
   profile = null;
   dashboard = null;
   adminView = 'inicio';
   clientes = null;
+  ventas = null;
   renderLogin(root, { message, onSubmit: async (email, password) => {
     const user = await signIn(email, password);
     profile = await resolveProfile(user.id);
@@ -42,11 +49,11 @@ function showPortal() {
   const isAdmin = profile.rol === 'admin';
   if (isAdmin && !dashboard) {
     dashboard = { status: 'loading' };
-    renderShell(root, profile, async () => { await signOut(); showLogin(); }, dashboard, loadDashboard, adminView, clientes, clientHandlers());
+    renderShell(root, profile, async () => { await signOut(); showLogin(); }, dashboard, loadDashboard, adminView, clientes, clientHandlers(), ventas);
     void loadDashboard();
     return;
   }
-  renderShell(root, profile, async () => { await signOut(); showLogin(); }, isAdmin ? dashboard : null, loadDashboard, adminView, clientes, clientHandlers());
+  renderShell(root, profile, async () => { await signOut(); showLogin(); }, isAdmin ? dashboard : null, loadDashboard, adminView, clientes, clientHandlers(), ventas);
 }
 
 function clientHandlers() {
@@ -58,7 +65,12 @@ function clientHandlers() {
         detalleRequest.next();
         clientes = clearClienteDetail(clientes);
       }
+      if (view !== 'ventas') {
+        ventaDetalleRequest.next();
+        ventas = clearVentaDetail(ventas);
+      }
       if (view === 'clientes' && !clientes) void loadClients();
+      if (view === 'ventas' && !ventas) void loadSales();
       showPortal();
     },
     onSearch(query) { void loadClients(query); },
@@ -69,6 +81,14 @@ function clientHandlers() {
     },
     onRetryDetail() { if (clientes?.selected) void loadDetail(clientes.selected); },
     onCloseDetail() { detalleRequest.next(); clientes = clearClienteDetail(clientes); showPortal(); },
+    onFilterSales(filters) { void loadSales(filters); },
+    onRetrySales() { void loadSales(ventas?.filters || {}); },
+    onSelectSale(id) {
+      const venta = ventas?.items?.find((item) => item.id === id);
+      if (venta) void loadSaleDetail(venta);
+    },
+    onRetrySaleDetail() { if (ventas?.selected) void loadSaleDetail(ventas.selected); },
+    onCloseSaleDetail() { ventaDetalleRequest.next(); ventas = clearVentaDetail(ventas); showPortal(); },
   };
 }
 
@@ -115,6 +135,39 @@ async function loadDetail(cliente) {
     clientes = { ...clientes, selected: cliente, detail: { status: 'error' } };
   }
   if (profile?.rol === 'admin' && adminView === 'clientes') showPortal();
+}
+
+async function loadSales(filters = {}) {
+  if (profile?.rol !== 'admin') return;
+  const request = ventasRequest.next();
+  ventaDetalleRequest.next();
+  ventas = { ...ventas, status: 'loading', items: ventas?.items ?? [], filters, detail: null, selected: null };
+  showPortal();
+  try {
+    const items = await loadVentas(getSupabaseClient(), filters);
+    if (!ventasRequest.isCurrent(request)) return;
+    ventas = { status: items.length ? 'ready' : 'empty', items, filters, detail: null, selected: null };
+  } catch {
+    if (!ventasRequest.isCurrent(request)) return;
+    ventas = { ...ventas, status: 'error', items: [], filters };
+  }
+  if (profile?.rol === 'admin' && adminView === 'ventas') showPortal();
+}
+
+async function loadSaleDetail(venta) {
+  if (profile?.rol !== 'admin') return;
+  const request = ventaDetalleRequest.next();
+  ventas = { ...ventas, selected: venta, detail: { status: 'loading' } };
+  showPortal();
+  try {
+    const data = await loadVentaDetail(getSupabaseClient(), venta);
+    if (!ventaDetalleRequest.isCurrent(request)) return;
+    ventas = { ...ventas, selected: venta, detail: { status: 'ready', data } };
+  } catch {
+    if (!ventaDetalleRequest.isCurrent(request)) return;
+    ventas = { ...ventas, selected: venta, detail: { status: 'error' } };
+  }
+  if (profile?.rol === 'admin' && adminView === 'ventas') showPortal();
 }
 
 async function handleAuthUser(user) {
