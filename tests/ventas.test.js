@@ -82,6 +82,26 @@ test('rechaza una respuesta RPC vacía antes de intentar abrir el detalle', asyn
   );
 });
 
+test('invalida una búsqueda de cliente pendiente al guardar y conserva el detalle creado', async () => {
+  const searches = createRequestGuard();
+  const pendingSearch = searches.next();
+  const created = { ...sale, id: 'venta-creada' };
+  let state = { form: { status: 'ready' }, selected: null, detail: null };
+
+  searches.next();
+  state = { ...state, form: null, selected: created, detail: { status: 'loading' } };
+
+  const delayedResults = [{ id: 'cliente-51', nombre_completo: 'Zoe Cliente' }];
+  if (searches.isCurrent(pendingSearch)) state = { ...state, form: { clientes: delayedResults } };
+
+  assert.equal(state.form, null);
+  assert.equal(state.selected, created);
+  assert.deepEqual(state.detail, { status: 'loading' });
+
+  const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
+  assert.match(source, /ventaClientSearchRequest\.next\(\);\n  const request = ventaSaveRequest\.next\(\);/);
+});
+
 test('busca clientes de venta en servidor sin precargar un slice fijo', async () => {
   const calls = [];
   const customerBeyondFirstSlice = { id: 'cliente-51', nombre_completo: 'Zoe Cliente', email: 'zoe@example.com', numero_documento: '51' };

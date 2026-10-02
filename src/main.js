@@ -320,6 +320,7 @@ async function saveSale(values) {
     showPortal();
     return;
   }
+  ventaClientSearchRequest.next();
   const request = ventaSaveRequest.next();
   ventas = { ...ventas, form: { ...form, values: input, status: 'saving', error: '' } };
   showPortal();
