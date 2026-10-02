@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { clearVentaDetail, createRequestGuard, loadVentaDetail, loadVentas, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard, currentPrices, loadVentaDetail, loadVentas, saveVenta, saleValues, validateSale, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
 import { renderVentas } from '../src/ui/ventas.js';
 import { renderShell } from '../src/ui/shell.js';
 
@@ -45,6 +45,33 @@ test('interpreta Desde y Hasta como días locales completos, incluso cerca del c
   });
   assert.ok(new Date('2026-10-01T01:00:00.000Z') < new Date(result.desde));
   assert.ok(new Date('2026-10-01T01:00:00.000Z') < new Date(result.hastaSeptiembre));
+});
+
+test('valida la venta manual y conserva vendedor opcional e ítems normalizados', () => {
+  assert.match(validateSale({ cliente_id: '', fecha_venta: '2026-10-02T10:00', moneda: 'ARS', items: [{}] }).error, /cliente/i);
+  assert.match(validateSale({ cliente_id: 'cliente-1', fecha_venta: '2026-10-02T10:00', moneda: 'ARS', items: [] }).error, /al menos un ítem/i);
+  const values = saleValues({ cliente_id: ' cliente-1 ', vendedor_id: '', fecha_venta: '2026-10-02T10:00', moneda: 'ars', items: [{ producto_id: ' producto-1 ', plan_id: ' plan-1 ', cantidad: '2' }] });
+  assert.deepEqual(values, { cliente_id: 'cliente-1', vendedor_id: null, fecha_venta: '2026-10-02T10:00', moneda: 'ARS', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }] });
+  assert.equal(validateSale(values).error, '');
+});
+
+test('muestra solo el precio activo y vigente para la fecha de venta', () => {
+  const prices = [
+    { id: 'anterior', estado: 'activo', vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: '2026-10-01T00:00:00Z' },
+    { id: 'actual', estado: 'activo', vigente_desde: '2026-10-01T00:00:00Z', vigente_hasta: null },
+    { id: 'inactivo', estado: 'inactivo', vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null },
+  ];
+  assert.deepEqual(currentPrices(prices, '2026-10-02T00:00:00Z').map(({ id }) => id), ['actual']);
+});
+
+test('crea la venta exclusivamente mediante la RPC atómica con clave de idempotencia', async () => {
+  const calls = [];
+  const client = { rpc(name, args) { calls.push([name, args]); return Promise.resolve({ data: sale, error: null }); } };
+  const created = await saveVenta(client, { cliente_id: 'cliente-1', vendedor_id: '', fecha_venta: '2026-10-02T10:00', moneda: 'ars', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: '2' }] }, '00000000-0000-4000-8000-000000000001');
+  assert.equal(created, sale);
+  assert.deepEqual(calls, [['crear_venta_manual', {
+    p_cliente_id: 'cliente-1', p_vendedor_id: null, p_fecha_venta: '2026-10-02T10:00:00.000Z', p_moneda: 'ARS', p_items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }], p_idempotency_key: '00000000-0000-4000-8000-000000000001',
+  }]]);
 });
 
 test('carga el detalle por IDs/FK y conserva los snapshots de venta_items', async () => {
@@ -97,6 +124,8 @@ test('representa loading, vacío, error y snapshots históricos de ventas', () =
   } });
   assert.match(html, /Producto histórico[\s\S]*Plan histórico[\s\S]*500/);
   assert.match(renderVentas({ status: 'ready', items: [sale], filters: {} }, { status: 'error' }), /retry-venta-detail/);
+  const form = renderVentas({ status: 'ready', items: [], filters: {}, form: { status: 'ready', values: { fecha_venta: '2026-10-02T10:00:00Z', moneda: 'ARS', items: [{ producto_id: 'producto-1', plan_id: 'plan-1', cantidad: 2 }] }, catalogo: { clientes: [{ id: 'cliente-1', nombre_completo: 'Ana' }], vendedores: [], productos: [{ id: 'producto-1', nombre: 'Comercio' }], planes: [{ id: 'plan-1', producto_id: 'producto-1', nombre: 'Mensual' }], precios: [{ id: 'precio-1', plan_id: 'plan-1', moneda: 'ARS', importe: 500, vigente_desde: '2026-01-01T00:00:00Z', vigente_hasta: null }] } } });
+  assert.match(form, /Nueva venta[\s\S]*Crear cliente[\s\S]*Precio vigente[\s\S]*500/);
 });
 
 test('mantiene el detalle cancelable y la navegación de ventas solo para administración', async () => {
@@ -120,4 +149,16 @@ test('la migración limita las relaciones de licencias y comisiones a una venta 
   assert.match(source, /p\.id = c\.pago_id and p\.venta_id = p_venta_id/);
   assert.doesNotMatch(source, /external_reference/);
   assert.match(source, /security invoker/);
+});
+
+test('la migración de alta manual usa una RPC invoker, snapshots e idempotencia sin external_reference', async () => {
+  const source = await readFile(new URL('../supabase/migrations/20261002000000_issue_43_alta_manual_ventas.sql', import.meta.url), 'utf8');
+  const validation = await readFile(new URL('../supabase/validation/20261002000000_issue_43_alta_manual_ventas.sql', import.meta.url), 'utf8');
+  assert.match(source, /security invoker/);
+  assert.match(source, /app_private\.es_admin\(\)/);
+  assert.match(source, /manual_idempotency_key/);
+  assert.match(source, /insert into public\.ventas[\s\S]*insert into public\.venta_items/);
+  assert.match(source, /precio_id, descripcion, producto_nombre, plan_nombre, cantidad, precio_unitario, importe_total/);
+  assert.doesNotMatch(source, /external_reference/);
+  assert.match(validation, /authenticated_con_execute[\s\S]*anon_sin_execute/);
 });

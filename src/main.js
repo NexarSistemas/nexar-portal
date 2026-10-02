@@ -4,7 +4,7 @@ import { restoreSession, watchSession } from './auth/session.js';
 import { getSupabaseClient } from './supabase/client.js';
 import { hasDashboardData, loadAdminDashboard } from './dashboard/admin.js';
 import { clearClienteDetail, clientValues, createRequestGuard, loadClienteDetail, loadClientes, saveCliente, validateClient } from './dashboard/clientes.js';
-import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, loadVentaDetail, loadVentas } from './dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard as createVentasRequestGuard, loadVentaDetail, loadVentaFormData, loadVentas, saveVenta, validateSale } from './dashboard/ventas.js';
 import { renderLogin, renderShell } from './ui/shell.js';
 import './styles/main.css';
 
@@ -25,6 +25,8 @@ const detalleRequest = createRequestGuard();
 const clienteSaveRequest = createRequestGuard();
 const ventasRequest = createVentasRequestGuard();
 const ventaDetalleRequest = createVentasRequestGuard();
+const ventaFormRequest = createVentasRequestGuard();
+const ventaSaveRequest = createVentasRequestGuard();
 let resolving = false;
 let unsubscribe = null;
 
@@ -34,6 +36,8 @@ function showLogin(message = '') {
   clienteSaveRequest.next();
   ventasRequest.next();
   ventaDetalleRequest.next();
+  ventaFormRequest.next();
+  ventaSaveRequest.next();
   profile = null;
   dashboard = null;
   adminView = 'inicio';
@@ -71,7 +75,9 @@ function clientHandlers() {
       }
       if (view !== 'ventas') {
         ventaDetalleRequest.next();
-        ventas = clearVentaDetail(ventas);
+        ventaFormRequest.next();
+        ventaSaveRequest.next();
+        ventas = { ...clearVentaDetail(ventas), form: null };
       }
       if (view === 'clientes' && !clientes) void loadClients();
       if (view === 'ventas' && !ventas) void loadSales();
@@ -118,6 +124,44 @@ function clientHandlers() {
     },
     onRetrySaleDetail() { if (ventas?.selected) void loadSaleDetail(ventas.selected); },
     onCloseSaleDetail() { ventaDetalleRequest.next(); ventas = clearVentaDetail(ventas); showPortal(); },
+    onCreateSale() { void createSaleForm(); },
+    onCancelSaleForm() { ventaFormRequest.next(); ventaSaveRequest.next(); ventas = { ...ventas, form: null }; showPortal(); },
+    onCreateClientFromSale() {
+      ventaFormRequest.next();
+      ventaSaveRequest.next();
+      adminView = 'clientes';
+      clientesRequest.next();
+      detalleRequest.next();
+      clienteSaveRequest.next();
+      clientes = { ...clientes, selected: null, detail: null, form: { id: null, values: {}, status: 'ready', error: '' }, notice: '' };
+      showPortal();
+    },
+    onAddSaleItem() {
+      if (!ventas?.form || ventas.form.status === 'saving') return;
+      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, items: [...(ventas.form.values.items ?? []), {}] } } };
+      showPortal();
+    },
+    onRemoveSaleItem(index) {
+      if (!ventas?.form || ventas.form.status === 'saving') return;
+      const items = (ventas.form.values.items ?? []).filter((_, itemIndex) => itemIndex !== index);
+      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, items } } };
+      showPortal();
+    },
+    onChangeSaleItem(index, field, value) {
+      if (!ventas?.form || ventas.form.status === 'saving') return;
+      const items = [...(ventas.form.values.items ?? [])];
+      const item = { ...items[index], [field]: value };
+      if (field === 'producto_id') item.plan_id = null;
+      items[index] = item;
+      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, items } } };
+      showPortal();
+    },
+    onChangeSaleField(field, value) {
+      if (!ventas?.form || ventas.form.status === 'saving') return;
+      ventas = { ...ventas, form: { ...ventas.form, values: { ...ventas.form.values, [field]: value } } };
+      showPortal();
+    },
+    onSaveSale(values) { void saveSale(values); },
   };
 }
 
@@ -223,6 +267,52 @@ async function loadSaleDetail(venta) {
     ventas = { ...ventas, selected: venta, detail: { status: 'error' } };
   }
   if (profile?.rol === 'admin' && adminView === 'ventas') showPortal();
+}
+
+async function createSaleForm() {
+  if (profile?.rol !== 'admin') return;
+  ventaDetalleRequest.next();
+  ventaSaveRequest.next();
+  const request = ventaFormRequest.next();
+  const values = { cliente_id: '', vendedor_id: '', fecha_venta: new Date().toISOString(), moneda: 'ARS', items: [{}] };
+  ventas = { ...ventas, selected: null, detail: null, form: { values, catalogo: {}, status: 'loading', error: '' }, notice: '' };
+  showPortal();
+  try {
+    const catalogo = await loadVentaFormData(getSupabaseClient());
+    if (!ventaFormRequest.isCurrent(request)) return;
+    ventas = { ...ventas, form: { values, catalogo, status: 'ready', error: '', idempotencyKey: crypto.randomUUID() } };
+  } catch {
+    if (!ventaFormRequest.isCurrent(request)) return;
+    ventas = { ...ventas, form: { values, catalogo: {}, status: 'ready', error: 'No pudimos cargar los datos para crear la venta.' } };
+  }
+  if (profile?.rol === 'admin' && adminView === 'ventas') showPortal();
+}
+
+async function saveSale(values) {
+  if (profile?.rol !== 'admin' || !ventas?.form || ventas.form.status !== 'ready') return;
+  const form = ventas.form;
+  const input = { ...values, items: form.values.items };
+  const validation = validateSale(input);
+  if (validation.error) {
+    ventas = { ...ventas, form: { ...form, values: input, error: validation.error } };
+    showPortal();
+    return;
+  }
+  const request = ventaSaveRequest.next();
+  ventas = { ...ventas, form: { ...form, values: input, status: 'saving', error: '' } };
+  showPortal();
+  try {
+    const created = await saveVenta(getSupabaseClient(), validation.sale, form.idempotencyKey);
+    if (!ventaSaveRequest.isCurrent(request)) return;
+    const items = [created, ...(ventas.items ?? []).filter((item) => item.id !== created.id)];
+    ventas = { ...ventas, status: 'ready', items, form: null, selected: created, detail: { status: 'loading' }, notice: 'La venta se creó correctamente.' };
+    showPortal();
+    void loadSaleDetail(created);
+  } catch {
+    if (!ventaSaveRequest.isCurrent(request)) return;
+    ventas = { ...ventas, form: { ...form, values: input, status: 'ready', error: 'No pudimos guardar la venta. Revisá los datos e intentá nuevamente.' } };
+    showPortal();
+  }
 }
 
 async function handleAuthUser(user) {

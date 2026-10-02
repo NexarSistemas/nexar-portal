@@ -4,6 +4,75 @@ const SELLER_FIELDS = 'id,codigo_vendedor,email,telefono';
 const ITEM_FIELDS = 'id,venta_id,producto_id,plan_id,precio_id,descripcion,producto_nombre,plan_nombre,cantidad,precio_unitario,importe_total';
 const PAYMENT_FIELDS = 'id,venta_id,monto,moneda,proveedor_origen,estado_proveedor,decision_administrativa,created_at';
 const SALE_LIST_LIMIT = 50;
+const FORM_CLIENT_FIELDS = 'id,nombre_completo,email,numero_documento';
+const FORM_SELLER_FIELDS = 'id,codigo_vendedor';
+const PRODUCT_FIELDS = 'id,nombre';
+const PLAN_FIELDS = 'id,producto_id,nombre';
+const PRICE_FIELDS = 'id,plan_id,moneda,importe,estado,vigente_desde,vigente_hasta';
+
+function cleanOptional(value) {
+  const cleaned = String(value ?? '').trim();
+  return cleaned || null;
+}
+
+export function saleValues(values = {}) {
+  return {
+    cliente_id: cleanOptional(values.cliente_id),
+    vendedor_id: cleanOptional(values.vendedor_id),
+    fecha_venta: cleanOptional(values.fecha_venta),
+    moneda: String(values.moneda ?? 'ARS').trim().toUpperCase(),
+    items: (values.items ?? []).map((item) => ({
+      producto_id: cleanOptional(item.producto_id),
+      plan_id: cleanOptional(item.plan_id),
+      cantidad: Number(item.cantidad),
+    })),
+  };
+}
+
+export function validateSale(values) {
+  const sale = saleValues(values);
+  if (!sale.cliente_id) return { sale, error: 'Seleccioná un cliente.' };
+  if (!sale.fecha_venta) return { sale, error: 'Indicá la fecha de la venta.' };
+  if (!/^[A-Z]{3}$/.test(sale.moneda)) return { sale, error: 'Indicá una moneda válida.' };
+  if (!sale.items.length) return { sale, error: 'Agregá al menos un ítem.' };
+  if (sale.items.some((item) => !item.producto_id || !Number.isFinite(item.cantidad) || item.cantidad <= 0)) return { sale, error: 'Cada ítem requiere un producto y una cantidad mayor a cero.' };
+  return { sale, error: '' };
+}
+
+export function currentPrices(prices, at) {
+  const when = new Date(at).getTime();
+  return (prices ?? []).filter((price) => price.estado === 'activo'
+    && new Date(price.vigente_desde).getTime() <= when
+    && (!price.vigente_hasta || new Date(price.vigente_hasta).getTime() > when));
+}
+
+export async function loadVentaFormData(client) {
+  const clientsRequest = client.from('clientes').select(FORM_CLIENT_FIELDS).order('nombre_completo', { ascending: true }).limit(SALE_LIST_LIMIT);
+  const sellersRequest = client.from('vendedores').select(FORM_SELLER_FIELDS).order('codigo_vendedor', { ascending: true });
+  const productsRequest = client.from('productos').select(PRODUCT_FIELDS).eq('activo', true).order('nombre', { ascending: true });
+  const plansRequest = client.from('planes').select(PLAN_FIELDS).eq('activo', true).order('nombre', { ascending: true });
+  const pricesRequest = client.from('precios').select(PRICE_FIELDS).eq('estado', 'activo').order('vigente_desde', { ascending: false });
+  const results = await Promise.all([clientsRequest, sellersRequest, productsRequest, plansRequest, pricesRequest]);
+  for (const result of results) if (result.error) throw result.error;
+  return {
+    clientes: results[0].data ?? [], vendedores: results[1].data ?? [], productos: results[2].data ?? [], planes: results[3].data ?? [], precios: results[4].data ?? [],
+  };
+}
+
+export async function saveVenta(client, values, idempotencyKey) {
+  const { sale, error } = validateSale(values);
+  if (error) throw new Error(error);
+  const { data, error: rpcError } = await client.rpc('crear_venta_manual', {
+    p_cliente_id: sale.cliente_id,
+    p_vendedor_id: sale.vendedor_id,
+    p_fecha_venta: new Date(sale.fecha_venta).toISOString(),
+    p_moneda: sale.moneda,
+    p_items: sale.items,
+    p_idempotency_key: idempotencyKey,
+  });
+  if (rpcError) throw rpcError;
+  return data;
+}
 
 export function createRequestGuard() {
   let current = 0;

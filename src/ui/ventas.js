@@ -22,13 +22,54 @@ export function renderVentas(ventas, detail) {
   const filters = listing.filters ?? {};
   const list = listing.status === 'ready' ? `<div class="sales-list" aria-label="Resultados de ventas">${listing.items.map((venta) => `
     <button class="sale-row" type="button" data-sale-id="${escapeHtml(venta.id)}"><strong>${date(venta.fecha_venta)}</strong><span>${escapeHtml(venta.estado)}</span><span>${money(venta.importe_total, venta.moneda)}</span></button>`).join('')}</div>` : renderStatus(listing, 'Cargando ventas…', 'No encontramos ventas con los filtros seleccionados.', 'No pudimos cargar las ventas.', 'retry-ventas');
-  const detailContent = detail?.status === 'ready' ? renderVentaDetail(detail.data) : renderStatus(detail, 'Cargando detalle de la venta…', '', 'No pudimos cargar el detalle de la venta.', 'retry-venta-detail');
+  const detailContent = listing.form ? renderVentaForm(listing.form) : detail?.status === 'ready' ? renderVentaDetail(detail.data) : renderStatus(detail, 'Cargando detalle de la venta…', '', 'No pudimos cargar el detalle de la venta.', 'retry-venta-detail');
 
   return `<section class="sales-page">
-    <div class="sales-header"><p class="eyebrow">Administración</p><h1>Ventas</h1><p class="muted">Consultá ventas e ítems desde sus relaciones canónicas.</p></div>
+    <div class="sales-header"><div><p class="eyebrow">Administración</p><h1>Ventas</h1><p class="muted">Consultá ventas e ítems desde sus relaciones canónicas.</p></div><button class="button primary" id="new-sale" type="button">Nueva venta</button></div>
+    ${listing.notice ? `<p class="client-notice" role="status" aria-live="polite">${escapeHtml(listing.notice)}</p>` : ''}
     <form class="sale-filters" id="sale-filters"><label>Estado<select name="estado"><option value="">Todos</option>${['pendiente', 'confirmada', 'cancelada'].map((estado) => `<option value="${estado}" ${filters.estado === estado ? 'selected' : ''}>${estado}</option>`).join('')}</select></label><label>Desde<input name="desde" type="date" value="${escapeHtml(filters.desde || '')}" /></label><label>Hasta<input name="hasta" type="date" value="${escapeHtml(filters.hasta || '')}" /></label><button class="button secondary" type="submit">Filtrar</button></form>
     <div class="sales-layout"><section class="sales-panel"><h2>Resultados</h2>${list}</section><section class="sales-detail" aria-live="polite">${detailContent || '<div class="dashboard-status"><p>Seleccioná una venta para ver su detalle.</p></div>'}</section></div>
   </section>`;
+}
+
+function localDateTime(value) {
+  const dateValue = value ? new Date(value) : new Date();
+  const offset = dateValue.getTimezoneOffset() * 60000;
+  return new Date(dateValue.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function itemPrice(form, item) {
+  if (!item.plan_id) return null;
+  const at = new Date(form.values.fecha_venta).getTime();
+  return (form.catalogo?.precios ?? []).find((price) => price.plan_id === item.plan_id
+    && price.moneda === form.values.moneda
+    && new Date(price.vigente_desde).getTime() <= at
+    && (!price.vigente_hasta || new Date(price.vigente_hasta).getTime() > at));
+}
+
+function renderVentaForm(form) {
+  const values = form.values ?? {};
+  const catalogo = form.catalogo ?? {};
+  const saving = form.status !== 'ready';
+  const items = values.items?.length ? values.items : [{}];
+  return `<div class="sale-detail-content"><div class="sale-detail-title"><div><p class="eyebrow">Ventas</p><h2>Nueva venta</h2></div><button class="button quiet" id="cancel-sale-form" type="button" ${saving ? 'disabled' : ''}>Cancelar</button></div>
+    <form id="sale-form" class="sale-form">
+      <label for="sale-client">Cliente<select id="sale-client" name="cliente_id" required ${saving ? 'disabled' : ''}><option value="">Seleccioná un cliente</option>${(catalogo.clientes ?? []).map((client) => `<option value="${escapeHtml(client.id)}" ${values.cliente_id === client.id ? 'selected' : ''}>${escapeHtml(client.nombre_completo)}${client.numero_documento ? ` · ${escapeHtml(client.numero_documento)}` : ''}</option>`).join('')}</select></label>
+      <button class="button secondary sale-client-link" id="create-client-from-sale" type="button" ${saving ? 'disabled' : ''}>Crear cliente</button>
+      <label for="sale-seller">Vendedor (opcional)<select id="sale-seller" name="vendedor_id" ${saving ? 'disabled' : ''}><option value="">Sin vendedor asociado</option>${(catalogo.vendedores ?? []).map((seller) => `<option value="${escapeHtml(seller.id)}" ${values.vendedor_id === seller.id ? 'selected' : ''}>${escapeHtml(seller.codigo_vendedor)}</option>`).join('')}</select></label>
+      <div class="sale-form-row"><label for="sale-date">Fecha<input id="sale-date" name="fecha_venta" type="datetime-local" value="${escapeHtml(localDateTime(values.fecha_venta))}" required ${saving ? 'disabled' : ''} /></label><label for="sale-currency">Moneda<input id="sale-currency" name="moneda" value="${escapeHtml(values.moneda || 'ARS')}" maxlength="3" required ${saving ? 'disabled' : ''} /></label></div>
+      <section class="sale-form-items"><div><h3>Ítems</h3><button class="button secondary" id="add-sale-item" type="button" ${saving ? 'disabled' : ''}>Agregar ítem</button></div>${items.map((item, index) => renderSaleItem(form, item, index, saving)).join('')}</section>
+      ${form.error ? `<p class="client-form-error" role="alert">${escapeHtml(form.error)}</p>` : ''}
+      <button class="button primary" type="submit" ${saving ? 'disabled' : ''}>${form.status === 'saving' ? 'Guardando…' : form.status === 'loading' ? 'Cargando…' : 'Crear venta'}</button>
+    </form>
+  </div>`;
+}
+
+function renderSaleItem(form, item, index, saving) {
+  const products = form.catalogo?.productos ?? [];
+  const plans = (form.catalogo?.planes ?? []).filter((plan) => plan.producto_id === item.producto_id);
+  const price = itemPrice(form, item);
+  return `<article class="sale-form-item" data-sale-item="${index}"><div class="sale-form-item-heading"><strong>Ítem ${index + 1}</strong>${index ? `<button class="button quiet remove-sale-item" type="button" data-remove-sale-item="${index}" ${saving ? 'disabled' : ''}>Quitar</button>` : ''}</div><label>Producto<select data-sale-item-field="producto_id" data-sale-item="${index}" required ${saving ? 'disabled' : ''}><option value="">Seleccioná un producto</option>${products.map((product) => `<option value="${escapeHtml(product.id)}" ${item.producto_id === product.id ? 'selected' : ''}>${escapeHtml(product.nombre)}</option>`).join('')}</select></label><label>Plan${plans.length ? `<select data-sale-item-field="plan_id" data-sale-item="${index}" required ${saving ? 'disabled' : ''}><option value="">Seleccioná un plan</option>${plans.map((plan) => `<option value="${escapeHtml(plan.id)}" ${item.plan_id === plan.id ? 'selected' : ''}>${escapeHtml(plan.nombre)}</option>`).join('')}</select>` : '<span class="muted">Este producto no tiene planes activos.</span>'}</label><label>Cantidad<input data-sale-item-field="cantidad" data-sale-item="${index}" type="number" min="0.001" step="0.001" value="${escapeHtml(item.cantidad || 1)}" required ${saving ? 'disabled' : ''} /></label><p class="sale-price">${price ? `Precio vigente: <strong>${money(price.importe, price.moneda)}</strong>` : item.plan_id ? 'No hay un precio vigente para ese plan y moneda.' : 'Seleccioná un plan para resolver el precio vigente.'}</p></article>`;
 }
 
 function renderVentaDetail({ venta, cliente, vendedor, items, pagos, licencias, comisiones }) {
