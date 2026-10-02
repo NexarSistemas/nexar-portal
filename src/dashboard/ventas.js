@@ -17,9 +17,15 @@ export function clearVentaDetail(ventas) {
   return ventas ? { ...ventas, selected: null, detail: null } : ventas;
 }
 
-function nextDate(value) {
+export function localDayStart(value) {
   const [year, month, day] = value.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString();
+  return new Date(year, month - 1, day);
+}
+
+export function nextLocalDayStart(value) {
+  const nextDay = localDayStart(value);
+  nextDay.setDate(nextDay.getDate() + 1);
+  return nextDay;
 }
 
 export async function loadVentas(client, filters = {}) {
@@ -30,8 +36,8 @@ export async function loadVentas(client, filters = {}) {
     .limit(SALE_LIST_LIMIT);
 
   if (filters.estado) request = request.eq('estado', filters.estado);
-  if (filters.desde) request = request.gte('fecha_venta', new Date(`${filters.desde}T00:00:00.000Z`).toISOString());
-  if (filters.hasta) request = request.lt('fecha_venta', nextDate(filters.hasta));
+  if (filters.desde) request = request.gte('fecha_venta', localDayStart(filters.desde).toISOString());
+  if (filters.hasta) request = request.lt('fecha_venta', nextLocalDayStart(filters.hasta).toISOString());
 
   const { data, error } = await request;
   if (error) throw error;

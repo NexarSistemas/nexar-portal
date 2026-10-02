@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { clearVentaDetail, createRequestGuard, loadVentaDetail, loadVentas } from '../src/dashboard/ventas.js';
+import { clearVentaDetail, createRequestGuard, loadVentaDetail, loadVentas, localDayStart, nextLocalDayStart } from '../src/dashboard/ventas.js';
 import { renderVentas } from '../src/ui/ventas.js';
 import { renderShell } from '../src/ui/shell.js';
 
@@ -26,6 +26,25 @@ test('lista ventas con filtros canónicos de estado y fecha', async () => {
   assert.ok(calls.some((call) => call.join('|') === 'eq|estado|confirmada'));
   assert.ok(calls.some(([kind, column]) => kind === 'gte' && column === 'fecha_venta'));
   assert.ok(calls.some(([kind, column]) => kind === 'lt' && column === 'fecha_venta'));
+});
+
+test('interpreta Desde y Hasta como días locales completos, incluso cerca del cambio UTC', () => {
+  const previousTimeZone = process.env.TZ;
+  process.env.TZ = 'America/Argentina/Buenos_Aires';
+  const result = {
+    desde: localDayStart('2026-10-01').toISOString(),
+    hasta: nextLocalDayStart('2026-10-01').toISOString(),
+    hastaSeptiembre: nextLocalDayStart('2026-09-30').toISOString(),
+  };
+  process.env.TZ = previousTimeZone;
+
+  assert.deepEqual(result, {
+    desde: '2026-10-01T03:00:00.000Z',
+    hasta: '2026-10-02T03:00:00.000Z',
+    hastaSeptiembre: '2026-10-01T03:00:00.000Z',
+  });
+  assert.ok(new Date('2026-10-01T01:00:00.000Z') < new Date(result.desde));
+  assert.ok(new Date('2026-10-01T01:00:00.000Z') < new Date(result.hastaSeptiembre));
 });
 
 test('carga el detalle por IDs/FK y conserva los snapshots de venta_items', async () => {
