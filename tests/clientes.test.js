@@ -109,6 +109,44 @@ test('ignora respuestas tardías de búsquedas y detalles invalidados', async ()
   assert.equal(details.isCurrent(secondDetail), false);
 });
 
+test('invalida un listado pendiente al abrir o cambiar el formulario de cliente', async () => {
+  let resolve;
+  const pendingList = new Promise((done) => { resolve = done; });
+  const listings = createRequestGuard();
+  let state = { form: null, items: [] };
+  const request = listings.next();
+  const loading = pendingList.then((items) => {
+    if (listings.isCurrent(request)) state = { form: null, items };
+  });
+
+  listings.next();
+  state = { ...state, form: { id: null, values: { nombre_completo: 'Texto sin guardar' } } };
+  resolve([customer]);
+  await loading;
+
+  assert.equal(state.form.values.nombre_completo, 'Texto sin guardar');
+  assert.deepEqual(state.items, []);
+});
+
+test('ignora success y error de guardados que ya no corresponden al formulario activo', async () => {
+  const saves = createRequestGuard();
+  let state = { form: { id: null, values: { nombre_completo: 'Alta activa' }, status: 'saving' }, notice: '' };
+  const firstSave = saves.next();
+  const applySuccess = () => {
+    if (saves.isCurrent(firstSave)) state = { form: null, notice: 'El cliente se creó correctamente.' };
+  };
+  const applyError = () => {
+    if (saves.isCurrent(firstSave)) state = { ...state, form: { ...state.form, status: 'ready', error: 'No pudimos guardar el cliente.' } };
+  };
+
+  saves.next();
+  state = { form: { id: customer.id, values: { nombre_completo: 'Edición nueva' }, status: 'ready' }, notice: '' };
+  applySuccess();
+  applyError();
+
+  assert.deepEqual(state, { form: { id: customer.id, values: { nombre_completo: 'Edición nueva' }, status: 'ready' }, notice: '' });
+});
+
 test('limpia detalle pendiente al salir de Clientes y no lo restaura al volver', async () => {
   let resolve;
   const pendingDetail = new Promise((done) => { resolve = done; });
