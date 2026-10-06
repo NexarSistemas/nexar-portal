@@ -231,6 +231,14 @@ identidad con `auth.uid()`, verifica propiedad, cuenta y tenant activos, y
 calcula `COALESCE(SUM(fidelizacion_point_movements.puntos), 0)` sin aceptar un
 `user_id` ni crear saldo mutable.
 
+La migración `20261006000100_fidelizacion_operaciones_pendientes_cliente.sql`
+agrega `fidelizacion_obtener_operaciones_pendientes(uuid)`: una lectura de
+operaciones propias en `pending_customer` o `pending_staff`. El helper privado
+reutiliza `fidelizacion_es_cliente` para verificar propiedad, cuenta y tenant
+activos; el filtro de vigencia se evalúa con `pg_catalog.now()`, por lo que el
+cliente no decide expiración con su reloj local. No modifica estados ni crea
+movimientos.
+
 ## Validacion y reversibilidad
 
 Las consultas en `supabase/validation/m00.sql` a `m07.sql`, incluida `m06_6.sql`, son de lectura y se
