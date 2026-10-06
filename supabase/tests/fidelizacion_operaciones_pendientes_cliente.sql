@@ -53,9 +53,9 @@ begin
   ) o;
 
   if v_ids is distinct from array[
-    '41600000-0000-4000-8000-000000000004'::uuid,
     '41600000-0000-4000-8000-000000000001'::uuid,
-    '41600000-0000-4000-8000-000000000002'::uuid
+    '41600000-0000-4000-8000-000000000002'::uuid,
+    '41600000-0000-4000-8000-000000000004'::uuid
   ] then
     raise exception 'La lectura no devolvio exclusivamente pendientes propias vigentes: %.', v_ids;
   end if;
