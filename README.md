@@ -4,6 +4,19 @@ Frontend base estático para Nexar Portal, construido con Vite, JavaScript ES Mo
 
 La base SQL versionada se documenta en [supabase/](supabase/README.md).
 
+## Validación E2E de Fidelización
+
+`npm run test:e2e:fidelizacion` ejercita exclusivamente lecturas y rechazos de
+autorización por PostgREST: usa dos clientes, dos operadores y recompensas de
+tenants distintos configurados fuera de Git mediante variables `E2E_FIDELIZACION_*`.
+No crea ni modifica datos remotos. Las variables de cuentas y recompensas deben
+referir fixtures preexistentes, aisladas y de tenants diferentes.
+
+Las confirmaciones vencidas, reintentos idempotentes y prevención de movimientos
+duplicados se validan localmente en las suites SQL transaccionales de
+`supabase/tests/`; todas terminan con `ROLLBACK` y no deben ejecutarse contra el
+Supabase remoto compartido.
+
 ## Desarrollo
 
 Requiere Node.js y npm. Instalá dependencias y ejecutá Vite:
