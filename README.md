@@ -14,6 +14,10 @@ ni modifica datos remotos. Las cuentas y recompensas deben ser fixtures
 preexistentes, activas y de los tenants indicados; el cliente multi-tenant no
 puede usarse para las denegaciones cruzadas de clientes exclusivos.
 
+El runner carga opcionalmente `.env.e2e.local`, que está ignorado por Git; las
+variables del entorno tienen precedencia para CI. Guardar allí o en el almacén
+de secretos de CI únicamente las contraseñas de las cinco identidades E2E.
+
 Las confirmaciones vencidas, reintentos idempotentes y prevención de movimientos
 duplicados se validan localmente en las suites SQL transaccionales de
 `supabase/tests/`; todas terminan con `ROLLBACK` y no deben ejecutarse contra el
