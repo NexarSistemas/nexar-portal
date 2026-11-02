@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
+import { guardedFetch, validateConfiguration } from '../scripts/fidelizacion-e2e-safety.js';
 
 const required = [
   'E2E_FIDELIZACION_URL',
@@ -27,18 +28,19 @@ const missing = required.filter((name) => !process.env[name]);
 function clientFor(url, anonKey) {
   return createClient(url, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { fetch: guardedFetch(url) },
   });
 }
 
 async function tokenFor(client, email, password) {
   const { data, error } = await client.auth.signInWithPassword({ email, password });
-  assert.equal(error, null, 'la sesión E2E debe poder autenticarse');
+  assert.ok(!error, 'la sesión E2E debe poder autenticarse');
   assert.ok(data.session?.access_token, 'la sesión E2E debe devolver un access token');
   return data.session.access_token;
 }
 
 async function dataApi(url, anonKey, token, path, options = {}) {
-  const response = await fetch(new URL(path, url), {
+  const response = await guardedFetch(url)(new URL(path, url), {
     ...options,
     headers: {
       apikey: anonKey,
@@ -73,7 +75,7 @@ test('PostgREST preserva el aislamiento de Fidelización sin mutar fixtures', {
     : false,
 }, async () => {
   assert.equal(missing.length, 0, `requiere variables E2E autorizadas: ${missing.join(', ')}`);
-  const url = process.env.E2E_FIDELIZACION_URL;
+  const url = validateConfiguration(process.env, required).href;
   const anonKey = process.env.E2E_FIDELIZACION_ANON_KEY;
   const operatorAToken = await tokenFor(
     clientFor(url, anonKey),

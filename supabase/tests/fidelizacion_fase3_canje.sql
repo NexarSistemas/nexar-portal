@@ -37,10 +37,12 @@ insert into public.fidelizacion_rewards (id, tenant_id, nombre, puntos_requerido
 insert into public.fidelizacion_operations (id, tenant_id, account_id, tipo, puntos, estado, confirmed_at, idempotency_key) values
   ('41100000-0000-4000-8000-000000000001', '11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000001', 'earn', 100, 'confirmed', now(), 'fase3-earn-a'),
   ('41100000-0000-4000-8000-000000000002', '11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000002', 'earn', 100, 'confirmed', now(), 'fase3-earn-b'),
+  ('41100000-0000-4000-8000-000000000008', '11100000-0000-4000-8000-000000000002', '21100000-0000-4000-8000-000000000003', 'earn', 10, 'confirmed', now(), 'fase3-earn-tenant-b'),
   ('41100000-0000-4000-8000-000000000006', '11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000004', 'earn', 180, 'confirmed', now(), 'fase3-earn-c');
 insert into public.fidelizacion_point_movements (tenant_id, account_id, tipo, puntos, operation_id) values
   ('11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000001', 'earn', 100, '41100000-0000-4000-8000-000000000001'),
   ('11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000002', 'earn', 100, '41100000-0000-4000-8000-000000000002'),
+  ('11100000-0000-4000-8000-000000000002', '21100000-0000-4000-8000-000000000003', 'earn', 10, '41100000-0000-4000-8000-000000000008'),
   ('11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000004', 'earn', 180, '41100000-0000-4000-8000-000000000006');
 
 -- Cliente A crea una intencion, repite idempotentemente y conserva el costo original.
@@ -191,8 +193,8 @@ end $$;
 reset role;
 
 -- La reserva pendiente reduce el saldo disponible, pero no el saldo contable.
-insert into public.fidelizacion_operations (id, tenant_id, account_id, tipo, puntos, reward_id, estado, expires_at, idempotency_key) values
-  ('41100000-0000-4000-8000-000000000007', '11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000004', 'redeem', 100, '31100000-0000-4000-8000-000000000008', 'pending_customer', now() - interval '1 minute', 'fase3-reserva-expirada');
+insert into public.fidelizacion_operations (id, tenant_id, account_id, tipo, puntos, reward_id, estado, expires_at, created_at, idempotency_key) values
+  ('41100000-0000-4000-8000-000000000007', '11100000-0000-4000-8000-000000000001', '21100000-0000-4000-8000-000000000004', 'redeem', 100, '31100000-0000-4000-8000-000000000008', 'pending_customer', now() - interval '1 minute', now() - interval '2 minutes', 'fase3-reserva-expirada');
 select set_config('request.jwt.claims', '{"sub":"01100000-0000-4000-8000-000000000005","role":"authenticated"}', true);
 set local role authenticated;
 select operation_id from public.fidelizacion_crear_redeem('31100000-0000-4000-8000-000000000008', 'fase3-reserva-primera', null);
@@ -333,6 +335,11 @@ begin
   end if;
 end $$;
 
+-- El staff libera la reserva despues de verificar la atomicidad.
+set local role authenticated;
+select * from public.fidelizacion_cancelar_redeem((select id from public.fidelizacion_operations where idempotency_key = 'fase3-atomicidad'));
+reset role;
+
 -- Cancelacion: cliente antes de escanear; un confirmado no puede cancelarse.
 select set_config('request.jwt.claims', '{"sub":"01100000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 set local role authenticated;
@@ -368,10 +375,10 @@ declare
   v_cuenta_lock integer;
 begin
   select pg_catalog.lower(pg_get_functiondef('app_private.fidelizacion_confirmar_redeem(uuid)'::regprocedure)) into v_definicion;
-  v_cuenta_lock := pg_catalog.position('perform 1 from public.fidelizacion_accounts' in v_definicion);
+  v_cuenta_lock := position('perform 1 from public.fidelizacion_accounts' in v_definicion);
   if v_cuenta_lock = 0
-    or pg_catalog.position('where o.id = p_operation_id and o.tipo = ''redeem''' in pg_catalog.substr(v_definicion, v_cuenta_lock)) = 0
-    or pg_catalog.position('sum(m.puntos)' in v_definicion) < v_cuenta_lock then
+    or position('where o.id = p_operation_id and o.tipo = ''redeem''' in pg_catalog.substr(v_definicion, v_cuenta_lock)) = 0
+    or position('sum(m.puntos)' in v_definicion) < v_cuenta_lock then
     raise exception 'La confirmacion no conserva el orden cuenta-operacion antes de recalcular el saldo.';
   end if;
 end $$;
@@ -383,13 +390,13 @@ declare
   v_reserva integer;
 begin
   select pg_catalog.lower(pg_get_functiondef('app_private.fidelizacion_crear_redeem(uuid,text,timestamp with time zone)'::regprocedure)) into v_definicion;
-  v_cuenta_lock := pg_catalog.position('from public.fidelizacion_accounts a' in v_definicion);
-  v_reserva := pg_catalog.position('sum(o.puntos)' in v_definicion);
+  v_cuenta_lock := position('from public.fidelizacion_accounts a' in v_definicion);
+  v_reserva := position('sum(o.puntos)' in v_definicion);
   if v_cuenta_lock = 0
-    or pg_catalog.position('for update' in pg_catalog.substr(v_definicion, v_cuenta_lock)) = 0
+    or position('for update' in pg_catalog.substr(v_definicion, v_cuenta_lock)) = 0
     or v_reserva < v_cuenta_lock
-    or pg_catalog.position('o.estado in (''pending_customer'', ''pending_staff'')' in v_definicion) = 0
-    or pg_catalog.position('insert into public.fidelizacion_operations' in v_definicion) < v_reserva then
+    or position('o.estado in (''pending_customer'', ''pending_staff'')' in v_definicion) = 0
+    or position('insert into public.fidelizacion_operations' in v_definicion) < v_reserva then
     raise exception 'La creacion de canje no bloquea la cuenta antes de reservar el saldo disponible.';
   end if;
 end $$;
