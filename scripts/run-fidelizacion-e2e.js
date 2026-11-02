@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { validateConfiguration } from './fidelizacion-e2e-safety.js';
 
 async function localEnvironment() {
   try {
@@ -22,6 +23,12 @@ async function localEnvironment() {
 }
 
 const localEnv = await localEnvironment();
+try {
+  validateConfiguration({ ...localEnv, ...process.env }, ['E2E_FIDELIZACION_URL', 'E2E_FIDELIZACION_ANON_KEY']);
+} catch {
+  console.error('Configuración E2E local o clave pública inválida.');
+  process.exit(1);
+}
 const child = spawn(process.execPath, ['--test', 'tests/fidelizacion-postgrest-e2e.test.js'], {
   stdio: 'inherit',
   env: { ...localEnv, ...process.env, REQUIRE_FIDELIZACION_E2E: '1' },

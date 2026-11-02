@@ -430,11 +430,11 @@ begin
     'app_private.fidelizacion_confirmar_earn(text,uuid)'::regprocedure
   ) into v_definicion;
 
-  if pg_catalog.position('for update of a' in pg_catalog.lower(v_definicion)) = 0 then
+  if position('for update of a' in pg_catalog.lower(v_definicion)) = 0 then
     raise exception 'La confirmacion no toma el lock exclusivo de cuenta requerido.';
   end if;
 
-  if pg_catalog.position('for update' in pg_catalog.lower(v_definicion)) = 0 then
+  if position('for update' in pg_catalog.lower(v_definicion)) = 0 then
     raise exception 'La confirmacion no bloquea la operacion para serializar concurrencia.';
   end if;
 

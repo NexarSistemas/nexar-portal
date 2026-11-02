@@ -229,7 +229,7 @@ begin
     raise exception 'Falta la unicidad usada para idempotencia y concurrencia.';
   end if;
 
-  if pg_catalog.position(
+  if position(
     'on conflict on constraint fidelizacion_accounts_tenant_user_key'
     in pg_catalog.lower(
       pg_get_functiondef(
