@@ -4,6 +4,7 @@ import {
   cancelRedeem,
   confirmRedeem,
   createEarn,
+  listCustomers,
   listPendingOperations,
   resolveStaffAccess,
   searchAccount,
@@ -274,4 +275,16 @@ test('los errores de mutación no filtran mensajes del backend', async () => {
   await assert.rejects(() => confirmRedeem(client, 'operation-id'), {
     message: 'No pudimos completar la acción. Intentá nuevamente.',
   });
+});
+
+
+test('lista clientes con búsqueda y paginación mediante RPC', async () => {
+  const calls = [];
+  const client = { rpc: async (name, args) => {
+    calls.push({ name, args });
+    return { data: [{ account_id: 'a', cliente_email: 'a@example.invalid' }], error: null };
+  } };
+  assert.deepEqual(await listCustomers(client, '  ejemplo  ', 20), [{ account_id: 'a', cliente_email: 'a@example.invalid' }]);
+  assert.deepEqual(calls[0], { name: 'fidelizacion_listar_clientes_staff', args: { p_busqueda: 'ejemplo', p_limite: 20, p_offset: 20, p_account_id: null } });
+  await assert.rejects(() => listCustomers({ rpc: async () => ({ error: { message: 'privado' } }) }, '', 0), /No pudimos cargar/);
 });
