@@ -5,6 +5,7 @@ import {
   confirmRedeem,
   createEarn,
   getSessionUser,
+  listCustomers,
   listPendingOperations,
   resolveStaffAccess,
   searchAccount,
@@ -35,6 +36,10 @@ const state = {
   account: null,
   operations: [],
   searchedEmail: '',
+  customerSearch: '',
+  customers: [],
+  customerOffset: 0,
+  customerError: null,
   loading: false,
   notice: null,
   commerceQrUrl: null,
@@ -93,6 +98,7 @@ function renderPanel() {
         </section>
         ${renderCommerceQr()}
         ${renderNotice()}
+        ${renderCustomers()}
         <section class="fidelity-card fidelity-search-card" aria-labelledby="search-title">
           <div>
             <p class="fidelity-step">01</p>
@@ -108,6 +114,21 @@ function renderPanel() {
       </main>
     </div>`;
   bindPanelEvents();
+}
+
+function renderCustomers() {
+  return `<section class="fidelity-card" aria-labelledby="customers-title">
+    <h2 id="customers-title">Clientes del comercio</h2>
+    <form id="customers-form" class="fidelity-inline-form">
+      <label class="fidelity-sr-only" for="customer-filter">Buscar por email</label>
+      <input id="customer-filter" name="filter" type="search" maxlength="254" placeholder="Buscar por email" value="${escapeHtml(state.customerSearch)}" />
+      <button class="fidelity-button fidelity-button-primary" type="submit" ${state.loading ? 'disabled' : ''}>Buscar</button>
+    </form>
+    ${state.customerError ? `<p role="alert">${escapeHtml(state.customerError)}</p>` : ''}
+    ${state.customers.length ? `<ul>${state.customers.map((customer, index) => `<li>${escapeHtml(customer.cliente_email || `Cuenta ${customer.account_id}`)} <button class="fidelity-button fidelity-button-quiet" type="button" data-customer="${index}" ${state.loading ? 'disabled' : ''}>Seleccionar</button></li>`).join('')}</ul>` : '<p>No hay clientes para mostrar.</p>'}
+    <button class="fidelity-button fidelity-button-quiet" id="customers-prev" type="button" ${state.loading || state.customerOffset === 0 ? 'disabled' : ''}>Anterior</button>
+    <button class="fidelity-button fidelity-button-quiet" id="customers-next" type="button" ${state.loading || state.customers.length < 20 ? 'disabled' : ''}>Siguiente</button>
+  </section>`;
 }
 
 function renderCommerceQr() {
@@ -139,7 +160,7 @@ function renderAccount() {
       <article class="fidelity-card fidelity-balance-card">
         <div>
           <p class="fidelity-step">Cuenta seleccionada</p>
-          <h2>${escapeHtml(state.account.cliente_email)}</h2>
+          <h2>${escapeHtml(state.account.cliente_email || `Cuenta ${state.account.account_id}`)}</h2>
         </div>
         <div class="fidelity-balance"><strong>${formatPoints(state.account.saldo)}</strong><span>puntos disponibles</span></div>
       </article>
@@ -196,6 +217,16 @@ function renderNotice() {
 function bindPanelEvents() {
   root.querySelector('#logout').addEventListener('click', logout);
   root.querySelector('#search-form').addEventListener('submit', handleSearch);
+  root.querySelector('#customers-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    void loadCustomers(String(new FormData(event.currentTarget).get('filter')).trim(), 0);
+  });
+  root.querySelector('#customers-prev').addEventListener('click', () => void loadCustomers(state.customerSearch, Math.max(0, state.customerOffset - 20)));
+  root.querySelector('#customers-next').addEventListener('click', () => void loadCustomers(state.customerSearch, state.customerOffset + 20));
+  root.querySelectorAll('[data-customer]').forEach((button) => button.addEventListener('click', () => {
+    const customer = state.customers[Number(button.dataset.customer)];
+    if (customer) void selectCustomer(customer);
+  }));
   root.querySelector('#earn-form')?.addEventListener('submit', handleEarn);
   root.querySelector('#refresh')?.addEventListener('click', refreshAccount);
   root.querySelectorAll('[data-action]').forEach((button) => {
@@ -203,6 +234,44 @@ function bindPanelEvents() {
       const operation = state.operations[Number(button.dataset.operationIndex)];
       if (operation) void handleRedeem(button.dataset.action, operation.id);
     });
+  });
+}
+
+async function loadCustomers(search, offset) {
+  await lock.run(async () => {
+    state.loading = true;
+    state.customerError = null;
+    renderPanel();
+    try {
+      const customers = await listCustomers(client, search, offset);
+      state.customerSearch = search;
+      state.customerOffset = offset;
+      state.customers = customers;
+    } catch (error) {
+      state.customerError = error.message;
+    } finally {
+      state.loading = false;
+      renderPanel();
+    }
+  });
+}
+
+async function selectCustomer(customer) {
+  await lock.run(async () => {
+    state.loading = true;
+    state.notice = null;
+    renderPanel();
+    try {
+      await synchronizeAccountById(customer.account_id);
+      state.searchedEmail = customer.cliente_email || '';
+    } catch (error) {
+      state.account = null;
+      state.operations = [];
+      state.notice = { type: 'error', message: error.message };
+    } finally {
+      state.loading = false;
+      renderPanel();
+    }
   });
 }
 
@@ -299,7 +368,20 @@ async function refreshAccount() {
 }
 
 async function refreshData() {
-  await synchronizeOperator(state.account.cliente_email, true);
+  await synchronizeAccountById(state.account.account_id);
+}
+
+async function synchronizeAccountById(accountId) {
+  await runSuccessfulRefresh({
+    refresh: async () => {
+      const [account] = await listCustomers(client, '', 0, 1, accountId);
+      if (!account) throw new Error('La cuenta ya no está disponible.');
+      const operations = await listPendingOperations(client, account.account_id);
+      state.account = account;
+      state.operations = operations;
+    },
+    onSuccess: () => earnAttempts.clear(),
+  });
 }
 
 async function synchronizeOperator(email, requireAccount = false) {
@@ -331,6 +413,7 @@ async function start() {
     state.commerceQrUrl = commerceQrUrl(state.access.tenantQrCode, window.location);
     state.commerceQrImage = await createCommerceQrImage(state.commerceQrUrl);
     renderPanel();
+    await loadCustomers('', 0);
   } catch (error) {
     if (error instanceof UnauthorizedStaffError) return renderUnauthorized();
     root.innerHTML = `<main class="fidelity-centered"><section class="fidelity-message-card"><h1>No pudimos cargar el panel</h1><p class="fidelity-muted">${escapeHtml(error.message)}</p><a class="fidelity-button fidelity-button-primary" href="${loginUrl()}">Volver al ingreso</a></section></main>`;

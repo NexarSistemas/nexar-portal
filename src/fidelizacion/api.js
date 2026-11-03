@@ -65,6 +65,14 @@ export async function searchAccount(client, email) {
   return data?.[0] ?? null;
 }
 
+export async function listCustomers(client, search, offset, limit = 20, accountId = null) {
+  const { data, error } = await client.rpc('fidelizacion_listar_clientes_staff', {
+    p_busqueda: search.trim(), p_limite: limit, p_offset: offset, p_account_id: accountId,
+  });
+  if (error) throw new Error(READ_ERROR);
+  return data ?? [];
+}
+
 export async function listPendingOperations(client, accountId) {
   const { data, error } = await client
     .from('fidelizacion_operations')
