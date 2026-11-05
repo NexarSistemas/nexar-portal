@@ -6,6 +6,7 @@ import {
   createEarn,
   getSessionUser,
   listCustomers,
+  listCheckIns,
   listPendingOperations,
   resolveStaffAccess,
   searchAccount,
@@ -25,9 +26,14 @@ import {
   runSuccessfulRefresh,
 } from './earn-flow.js';
 import { createCommerceQrImage } from './qr.js';
+import { loadCheckIns, startCheckInPolling } from './check-in.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
+const checkInEnabled = import.meta.env.VITE_CHECK_IN_QR_ENABLED === 'true';
+let checkIns = [];
+let checkInLoading = false;
+let checkInError = false;
 let client;
 const lock = createActionLock();
 const earnAttempts = createEarnAttemptStore(() => crypto.randomUUID());
@@ -98,6 +104,7 @@ function renderPanel() {
         </section>
         ${renderCommerceQr()}
         ${renderNotice()}
+        ${checkInEnabled ? '<section class="fidelity-card" id="check-ins" aria-live="polite"></section>' : ''}
         ${renderCustomers()}
         <section class="fidelity-card fidelity-search-card" aria-labelledby="search-title">
           <div>
@@ -114,6 +121,32 @@ function renderPanel() {
       </main>
     </div>`;
   bindPanelEvents();
+  renderCheckIns();
+}
+
+function renderCheckIns() {
+  const target = root.querySelector('#check-ins');
+  if (!target) return;
+  target.innerHTML = `<h2>Clientes presentes</h2>${checkInError ? '<p role="alert">No pudimos actualizar los check-ins.</p>' : ''}${checkIns.length ? `<ul>${checkIns.map((item, index) => `<li>${escapeHtml(item.cliente_email || `Cuenta ${item.account_id}`)} <button class="fidelity-button fidelity-button-quiet" type="button" data-check-in="${index}">Seleccionar</button></li>`).join('')}</ul>` : '<p>No hay check-ins vigentes.</p>'}`;
+  target.querySelectorAll('[data-check-in]').forEach((button) => button.addEventListener('click', () => {
+    const item = checkIns[Number(button.dataset.checkIn)];
+    if (item && Date.parse(item.expires_at) > Date.now()) void selectCustomer(item);
+  }));
+}
+
+async function refreshCheckIns() {
+  if (!checkInEnabled || checkInLoading || document.hidden || !state.access) return;
+  checkInLoading = true;
+  try {
+    checkIns = await loadCheckIns(client, listCheckIns, listCustomers);
+    checkInError = false;
+  } catch (_) {
+    checkIns = [];
+    checkInError = true;
+  } finally {
+    checkInLoading = false;
+    renderCheckIns();
+  }
 }
 
 function renderCustomers() {
@@ -414,6 +447,9 @@ async function start() {
     state.commerceQrImage = await createCommerceQrImage(state.commerceQrUrl);
     renderPanel();
     await loadCustomers('', 0);
+    if (checkInEnabled) {
+      startCheckInPolling(window, document, refreshCheckIns);
+    }
   } catch (error) {
     if (error instanceof UnauthorizedStaffError) return renderUnauthorized();
     root.innerHTML = `<main class="fidelity-centered"><section class="fidelity-message-card"><h1>No pudimos cargar el panel</h1><p class="fidelity-muted">${escapeHtml(error.message)}</p><a class="fidelity-button fidelity-button-primary" href="${loginUrl()}">Volver al ingreso</a></section></main>`;
