@@ -11,3 +11,22 @@ export async function loadCheckIns(client, listCheckIns, listCustomers, now = Da
   }
   return accounts;
 }
+
+export function startCheckInPolling(windowTarget, documentTarget, refresh) {
+  let timer;
+  const update = () => { if (!documentTarget.hidden) void refresh(); };
+  const start = () => {
+    if (timer !== undefined) return;
+    update();
+    timer = windowTarget.setInterval(update, 30000);
+  };
+  const stop = () => {
+    if (timer === undefined) return;
+    windowTarget.clearInterval(timer);
+    timer = undefined;
+  };
+  windowTarget.addEventListener('pagehide', stop);
+  windowTarget.addEventListener('pageshow', start);
+  documentTarget.addEventListener('visibilitychange', update);
+  start();
+}

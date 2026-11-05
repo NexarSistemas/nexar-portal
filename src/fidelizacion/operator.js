@@ -26,7 +26,7 @@ import {
   runSuccessfulRefresh,
 } from './earn-flow.js';
 import { createCommerceQrImage } from './qr.js';
-import { loadCheckIns } from './check-in.js';
+import { loadCheckIns, startCheckInPolling } from './check-in.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -34,7 +34,6 @@ const checkInEnabled = import.meta.env.VITE_CHECK_IN_QR_ENABLED === 'true';
 let checkIns = [];
 let checkInLoading = false;
 let checkInError = false;
-let checkInTimer;
 let client;
 const lock = createActionLock();
 const earnAttempts = createEarnAttemptStore(() => crypto.randomUUID());
@@ -449,10 +448,7 @@ async function start() {
     renderPanel();
     await loadCustomers('', 0);
     if (checkInEnabled) {
-      void refreshCheckIns();
-      checkInTimer = window.setInterval(() => void refreshCheckIns(), 30000);
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) void refreshCheckIns(); });
-      window.addEventListener('pagehide', () => window.clearInterval(checkInTimer), { once: true });
+      startCheckInPolling(window, document, refreshCheckIns);
     }
   } catch (error) {
     if (error instanceof UnauthorizedStaffError) return renderUnauthorized();
