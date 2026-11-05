@@ -110,3 +110,9 @@ export async function cancelRedeem(client, operationId) {
   if (error) throw new Error(ACTION_ERROR);
   return data?.[0] ?? null;
 }
+
+export async function listCheckIns(client) {
+  const { data, error } = await client.rpc('fidelizacion_listar_check_in_staff');
+  if (error) throw new Error(READ_ERROR);
+  return data ?? [];
+}
