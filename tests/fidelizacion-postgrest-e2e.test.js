@@ -276,13 +276,13 @@ test('B2: acreditación y canje autorizados con fixtures descartables', {
   const unauthorizedEarnArgs = (accountId, key) => ({
     p_account_id: accountId, p_puntos: 10, p_idempotency_key: key,
   });
-  for (const [token, accountId, key] of [
+  for (const [token, accountId, idempotencyKey] of [
     [operator, process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_B_ACCOUNT_ID, 'b2-cross-a'],
     [otherOperator, process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_A_ACCOUNT_ID, 'b2-cross-b'],
     [customer, process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_A_ACCOUNT_ID, 'b2-customer'],
   ]) {
-    assertForbidden(await rpc(url, key, token, 'fidelizacion_crear_earn',
-      unauthorizedEarnArgs(accountId, key)), 'la creación de puntos no autorizada debe rechazarse');
+    assertForbidden(await invoke(token, 'fidelizacion_crear_earn',
+      unauthorizedEarnArgs(accountId, idempotencyKey)), 'la creación de puntos no autorizada debe rechazarse');
   }
   const anonymousEarn = await rpc(url, key, null, 'fidelizacion_crear_earn',
     unauthorizedEarnArgs(process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_A_ACCOUNT_ID, 'b2-anon'));
