@@ -1,7 +1,5 @@
-import { isIP } from 'node:net';
-
 const missingMessage = 'Falta configuración E2E obligatoria.';
-const destinationMessage = 'Destino E2E no permitido: se requiere Supabase local en el puerto 54321.';
+const destinationMessage = 'Destino E2E no permitido: se requiere http://127.0.0.1:54331.';
 
 const keyMessage = 'La clave pública E2E no tiene un formato permitido.';
 
@@ -44,19 +42,16 @@ export function validateConfiguration(env, required) {
 
 export function localUrl(value, base = false) {
   const raw = String(value);
-  if (!/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):54321(?:[\/?#]|$)/i.test(raw)) {
+  if (!/^http:\/\/127\.0\.0\.1:54331(?:[\/?#]|$)/.test(raw)) {
     throw new Error(destinationMessage);
   }
   let url;
   try { url = new URL(raw); } catch { throw new Error(destinationMessage); }
-  if (url.protocol !== 'http:' || url.username || url.password || url.port !== '54321' ||
-      !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ||
+  if (url.protocol !== 'http:' || url.username || url.password || url.port !== '54331' ||
+      url.hostname !== '127.0.0.1' ||
       (base && (url.pathname !== '/' || url.search || url.hash))) {
     throw new Error(destinationMessage);
   }
-  // Evita que una entrada hosts o DNS redirija localhost a una dirección remota.
-  if (url.hostname === 'localhost') url.hostname = '127.0.0.1';
-  if (url.hostname !== '[::1]' && isIP(url.hostname) !== 4) throw new Error(destinationMessage);
   return url;
 }
 
