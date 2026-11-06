@@ -237,3 +237,104 @@ test('PostgREST preserva el aislamiento de Fidelización sin mutar fixtures', {
       'el cliente asociado a ambos tenants debe poder leer recompensas activas de ambos');
   }
 });
+
+test('B2: acreditación y canje autorizados con fixtures descartables', {
+  skip: process.env.E2E_FIDELIZACION_DISPOSABLE !== '1'
+    ? 'requiere fixtures locales descartables explícitos' : false,
+}, async () => {
+  const url = validateConfiguration(process.env, [...required, 'E2E_FIDELIZACION_TENANT_A_QR']).href;
+  const key = process.env.E2E_FIDELIZACION_ANON_KEY;
+  const accountA = process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_A_ACCOUNT_ID;
+  const accountB = process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_B_ACCOUNT_ID;
+  const reward = process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_A_REWARD_ID;
+  const qr = process.env.E2E_FIDELIZACION_TENANT_A_QR;
+  const operator = await tokenFor(clientFor(url, key), process.env.E2E_FIDELIZACION_OPERATOR_A_EMAIL,
+    process.env.E2E_FIDELIZACION_OPERATOR_A_PASSWORD);
+  const otherOperator = await tokenFor(clientFor(url, key), process.env.E2E_FIDELIZACION_OPERATOR_B_EMAIL,
+    process.env.E2E_FIDELIZACION_OPERATOR_B_PASSWORD);
+  const customer = await tokenFor(clientFor(url, key), process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_A_EMAIL,
+    process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_A_PASSWORD);
+  const otherCustomer = await tokenFor(clientFor(url, key), process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_B_EMAIL,
+    process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_B_PASSWORD);
+  const invoke = (token, name, args) => rpc(url, key, token, name, args);
+  const one = (result, label) => {
+    assert.equal(result.response.status, 200, label);
+    assert.equal(result.body?.length, 1, label);
+    return result.body[0];
+  };
+  const balance = async (token, account) => {
+    const result = await invoke(token, 'fidelizacion_obtener_saldo_cliente', { p_account_id: account });
+    assert.equal(result.response.status, 200);
+    return Number(result.body);
+  };
+  const movements = async (token, account) => {
+    const result = await dataApi(url, key, token,
+      `rest/v1/fidelizacion_point_movements?select=tipo,puntos,operation_id&account_id=eq.${encodeURIComponent(account)}`);
+    assert.equal(result.response.status, 200);
+    return result.body;
+  };
+  const unauthorizedEarnArgs = (accountId, key) => ({
+    p_account_id: accountId, p_puntos: 10, p_idempotency_key: key,
+  });
+  for (const [token, accountId, key] of [
+    [operator, process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_B_ACCOUNT_ID, 'b2-cross-a'],
+    [otherOperator, process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_A_ACCOUNT_ID, 'b2-cross-b'],
+    [customer, process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_A_ACCOUNT_ID, 'b2-customer'],
+  ]) {
+    assertForbidden(await rpc(url, key, token, 'fidelizacion_crear_earn',
+      unauthorizedEarnArgs(accountId, key)), 'la creación de puntos no autorizada debe rechazarse');
+  }
+  const anonymousEarn = await rpc(url, key, null, 'fidelizacion_crear_earn',
+    unauthorizedEarnArgs(process.env.E2E_FIDELIZACION_EXCLUSIVE_CUSTOMER_A_ACCOUNT_ID, 'b2-anon'));
+  assert.equal(anonymousEarn.response.ok, false, 'anon no puede crear puntos');
+
+  assert.equal(await balance(customer, accountA), 0);
+  assert.equal(await balance(otherCustomer, accountB), 0);
+  const earnArgs = { p_account_id: accountA, p_puntos: 10, p_idempotency_key: 'b2-earn-autorizado' };
+  const earn = one(await invoke(operator, 'fidelizacion_crear_earn', earnArgs), 'crear acreditación');
+  assert.equal(earn.estado, 'pending_customer');
+  assert.equal(one(await invoke(operator, 'fidelizacion_crear_earn', earnArgs), 'reintentar creación').operation_id,
+    earn.operation_id);
+  const confirmEarn = { p_public_qr_code: qr, p_operation_id: earn.operation_id };
+  assertForbidden(await invoke(operator, 'fidelizacion_confirmar_earn', confirmEarn),
+    'la acreditación se confirma por el cliente');
+  const earned = one(await invoke(customer, 'fidelizacion_confirmar_earn', confirmEarn), 'confirmar acreditación');
+  assert.equal(earned.estado, 'confirmed');
+  assert.equal(Number(earned.saldo), 10);
+  assert.equal(one(await invoke(customer, 'fidelizacion_confirmar_earn', confirmEarn), 'reintentar confirmación').operation_id,
+    earn.operation_id);
+  assert.deepEqual(await movements(customer, accountA), [{ tipo: 'earn', puntos: 10, operation_id: earn.operation_id }]);
+  console.log('B2 PASS acreditación: +10, saldo 10, un movimiento tras reintentos');
+
+  const createRedeem = (idempotencyKey) => ({ p_reward_id: reward, p_idempotency_key: idempotencyKey });
+  const pending = one(await invoke(customer, 'fidelizacion_crear_redeem', createRedeem('b2-reserva')), 'solicitar canje');
+  assert.equal(pending.estado, 'pending_customer');
+  assert.equal(one(await invoke(customer, 'fidelizacion_crear_redeem', createRedeem('b2-reserva')), 'reintentar canje').operation_id,
+    pending.operation_id);
+  const insufficient = await invoke(customer, 'fidelizacion_crear_redeem', createRedeem('b2-sin-disponible'));
+  assert.equal(insufficient.body?.code, '23514', 'la reserva impide gastar el saldo dos veces');
+  assert.equal(await balance(customer, accountA), 10, 'la reserva no modifica el saldo contable');
+  assert.equal((await movements(customer, accountA)).length, 1);
+  assert.equal(one(await invoke(customer, 'fidelizacion_cancelar_redeem', { p_operation_id: pending.operation_id }),
+    'cancelar y liberar reserva').estado, 'cancelled');
+  const redeem = one(await invoke(customer, 'fidelizacion_crear_redeem', createRedeem('b2-canje-final')), 'usar reserva liberada');
+  assert.equal(redeem.estado, 'pending_customer');
+  assert.equal(one(await invoke(customer, 'fidelizacion_escanear_redeem',
+    { p_public_qr_code: qr, p_operation_id: redeem.operation_id }), 'escanear QR').estado, 'pending_staff');
+  assert.equal(await balance(customer, accountA), 10, 'el escaneo todavía no descuenta puntos');
+  assertForbidden(await invoke(otherOperator, 'fidelizacion_confirmar_redeem', { p_operation_id: redeem.operation_id }),
+    'el operador del otro comercio no confirma el canje');
+  const confirmed = one(await invoke(operator, 'fidelizacion_confirmar_redeem', { p_operation_id: redeem.operation_id }), 'confirmar canje');
+  assert.equal(confirmed.estado, 'confirmed');
+  assert.equal(Number(confirmed.saldo), 0);
+  const retry = one(await invoke(operator, 'fidelizacion_confirmar_redeem', { p_operation_id: redeem.operation_id }), 'reintentar canje');
+  assert.equal(retry.redemption_id, confirmed.redemption_id);
+  const ledger = await movements(customer, accountA);
+  assert.equal(ledger.length, 2);
+  assert.deepEqual(ledger.find((row) => row.tipo === 'earn'), { tipo: 'earn', puntos: 10, operation_id: earn.operation_id });
+  assert.deepEqual(ledger.find((row) => row.tipo === 'redeem'), { tipo: 'redeem', puntos: -10, operation_id: redeem.operation_id });
+  assert.equal(await balance(customer, accountA), 0);
+  assert.equal(await balance(otherCustomer, accountB), 0);
+  assert.deepEqual(await movements(otherCustomer, accountB), []);
+  console.log('B2 PASS reserva y liberación; canje -10, saldo 0, otro comercio sin movimientos');
+});
